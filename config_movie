@@ -1,0 +1,45 @@
+# ================================
+# YouTube yt-dlp
+# Stable Movie Download Config
+# ================================
+
+# ================================
+# Extractor
+# ================================
+--remote-components ejs:github
+--extractor-args "youtube:player_client=default,web_embedded;skip=translated_subs"
+
+# ================================
+# Audio
+# ================================
+--audio-multistreams
+
+# ================================
+# Container
+# ================================
+--merge-output-format mkv
+
+# ================================
+# Subtitle
+# ================================
+--write-subs
+--sub-langs "all"
+--sub-format "vtt/best"
+--embed-subs
+--sleep-subtitles 2
+
+# ================================
+# Metadata & Embed
+# ================================
+--write-thumbnail
+--embed-thumbnail
+--embed-chapters
+--embed-metadata
+
+# ================================
+# Download
+# ================================
+--continue
+--ignore-errors
+--sleep-interval 5
+--max-sleep-interval 10
