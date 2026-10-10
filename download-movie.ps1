@@ -21,6 +21,59 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+
+
+
+
+# ========================================
+# watch?v= + list= ：询问单集还是整表
+# （递归下载单集时已带 PlaylistTitle，不会再问）
+# ========================================
+if (
+    [string]::IsNullOrWhiteSpace($PlaylistTitle) -and
+    $Url -match '(?i)youtube\.com/watch\?' -and
+    $Url -match '(?i)[?&]list=([a-zA-Z0-9_-]+)'
+) {
+    $ListId = $Matches[1]
+
+    $VideoId = $null
+    if ($Url -match '(?i)[?&]v=([a-zA-Z0-9_-]+)') {
+        $VideoId = $Matches[1]
+    }
+
+    Write-Host ""
+    Write-Host "=== LINK CONTAINS VIDEO + PLAYLIST ===" -ForegroundColor Cyan
+    Write-Host ""
+    if ($VideoId) {
+        Write-Host "Video    : $VideoId"
+    }
+    Write-Host "Playlist : $ListId"
+    Write-Host ""
+    Write-Host "  1 = Download this video only (默认)"
+    Write-Host "  2 = Download entire playlist"
+    Write-Host ""
+
+    $LinkChoice = Read-Host "Select [1-2] (default 1)"
+    if ([string]::IsNullOrWhiteSpace($LinkChoice)) { $LinkChoice = "1" }
+
+    if ($LinkChoice -eq "2") {
+        $Url = "https://www.youtube.com/playlist?list=$ListId"
+        Write-Host "Mode     : Full playlist" -ForegroundColor Yellow
+    }
+    else {
+        if ($VideoId) {
+            $Url = "https://www.youtube.com/watch?v=$VideoId"
+        }
+        Write-Host "Mode     : Single video" -ForegroundColor Yellow
+    }
+    Write-Host ""
+}
+
+
+
+
+
+
 # ========================================
 # 判断下载模式
 # ========================================
@@ -696,37 +749,28 @@ function Remove-TemporaryFiles {
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host ""
 
-    $base = [System.IO.Path]::ChangeExtension($Mkv, $null)
-    $base = $base.TrimEnd('.')
+    $dir  = [System.IO.Path]::GetDirectoryName($Mkv)
+    $name = [System.IO.Path]::GetFileNameWithoutExtension($Mkv)
+    $mkvName = [System.IO.Path]::GetFileName($Mkv)
 
-    $FilesToRemove = @(
-        "$base.description"
-        "$base.jpg"
-        "$base.webp"
-        "$base.png"
-        "$base.*.jpg"
-        "$base.*.webp"
-        "$base.*.png"
-        "$base.vtt"
-        "$base.*.vtt"
-        "$base.srt"
-        "$base.*.srt"
-    )
+    # 用 LiteralPath + 按文件名匹配，避免标题中的 [] 被当成通配符
+    $candidates = Get-ChildItem -LiteralPath $dir -File -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Name -ne $mkvName -and (
+                $_.BaseName -eq $name -or
+                $_.Name.StartsWith($name + ".")
+            )
+        }
 
-    foreach ($Pattern in $FilesToRemove) {
+    foreach ($f in $candidates) {
+        $ext = $f.Extension.ToLowerInvariant()
+        $isTemp =
+            $ext -in @(".webp", ".jpg", ".png", ".vtt", ".srt") -or
+            $f.Name.EndsWith(".description")
 
-        Get-ChildItem `
-            -Path $Pattern `
-            -File `
-            -ErrorAction SilentlyContinue |
-        ForEach-Object {
-
-            Write-Host "[Cleanup] $($_.Name)"
-
-            Remove-Item `
-                -LiteralPath $_.FullName `
-                -Force `
-                -ErrorAction SilentlyContinue
+        if ($isTemp) {
+            Write-Host "[Cleanup] $($f.Name)"
+            Remove-Item -LiteralPath $f.FullName -Force -ErrorAction SilentlyContinue
         }
     }
 }
