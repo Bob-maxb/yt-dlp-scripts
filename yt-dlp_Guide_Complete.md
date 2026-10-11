@@ -1,27 +1,27 @@
 # yt-dlp 下载项目完整指南
 
-> 版本：Complete v2（基于当前 `download-movie.ps1` / `query-JSON-v4.ps1` / `config_movie`）  
+> 版本：Complete v3  
+> 适用脚本：`download-movie.ps1` / `query-JSON-v4.ps1` / `config_movie`  
 > 更新日期：2026-10
 
 ---
 
 ## 0. 项目概述
 
-本项目用于自动化下载 YouTube 视频，核心能力包括：
+自动化下载 YouTube 视频，核心能力：
 
-- yt-dlp 下载（单视频 / Playlist / **频道 Videos 页**）
-- JSON 分析与 Opus 音频智能选择
-- PowerShell 自动化流程
-- ffmpeg 封装为 MKV
-- 多音轨 / 多字幕管理
-- Movie / Phonics 两套格式选择规则
-- 已完成视频跳过、Playlist 成功/失败统计
+- 单视频 / Playlist / 频道 Videos 页（`@Name` / `@Name/videos`）
+- `watch?v=...&list=...` 链接交互选择：只下本集或整表
+- JSON 分析与 Opus 多音轨选择（排除 DUBBED-AUTO）
+- Movie / Phonics 两套格式规则
+- 已完成 MKV 跳过、Playlist 成功/失败统计
+- 字幕嵌入、临时文件清理（兼容标题中的 `[]` 等特殊字符）
 
 **优选组合：**
 
 ```text
 视频: AV1 > VP9 > AVC1
-音频: Opus（多音轨，排除 DUBBED-AUTO）
+音频: Opus（多音轨）
 容器: MKV
 字幕: VTT → 嵌入 MKV
 ```
@@ -35,13 +35,14 @@ D:\yt-dlp
 ├── yt-dlp.exe
 ├── ffmpeg.exe
 ├── ffprobe.exe
-├── cookies.txt
+├── cookies.txt                 # 勿上传 GitHub
 ├── config_movie
-├── download-movie.ps1
-├── query-JSON-v4.ps1
-├── Docs
+├── yt-dlp-git\                 # 或脚本直接放在本目录
+│   ├── download-movie.ps1
+│   ├── query-JSON-v4.ps1
+│   ├── config_movie
 │   └── yt-dlp_Guide_Complete.md
-└── Logs
+└── ...
 ```
 
 **媒体保存位置：**
@@ -51,30 +52,29 @@ D:\yt-dlp
 | Movie   | `D:\03 Media\Movies & TV\`        |
 | Phonics | `D:\10 Learning\English\Phonics\` |
 
-**目录规则：**
-
 | 类型 | 路径 |
 |------|------|
 | 单视频 | `{BaseDir}\Single Files\{视频标题}\` |
 | Movie Playlist | `{BaseDir}\Playlist\{Playlist名称}\` |
 | Phonics Playlist | `{BaseDir}\{Playlist名称}\` |
 
-每个下载目录下有 `json\` 子目录，存放 `*.info.json` 与 `*.audio-selection.txt`。
+每集目录下有 `json\`（`*.info.json`、`*.audio-selection.txt`）。
 
 ---
 
 ## 2. 快速开始
 
+在脚本所在目录执行（例如 `D:\yt-dlp\yt-dlp-git`）：
+
 ### 2.1 单视频（Movie 默认）
 
 ```powershell
-cd D:\yt-dlp
 .\download-movie.ps1 "https://www.youtube.com/watch?v=XXXX"
 ```
 
-运行时会询问最高分辨率与编码偏好（可直接回车用默认：1080p + AV1）。
+会询问最高分辨率与编码（直接回车 = 1080p + AV1）。
 
-### 2.2 单视频 Phonics
+### 2.2 Phonics
 
 ```powershell
 .\download-movie.ps1 "https://www.youtube.com/watch?v=XXXX" -Mode Phonics
@@ -87,30 +87,45 @@ cd D:\yt-dlp
 .\download-movie.ps1 "https://www.youtube.com/playlist?list=XXXX" -Mode Phonics
 ```
 
-### 2.4 频道 Videos 页（当作 Playlist）
-
-支持类似：
+### 2.4 频道 Videos 页
 
 ```powershell
 .\download-movie.ps1 "https://www.youtube.com/@MissWhitmore"
 .\download-movie.ps1 "https://www.youtube.com/@MissWhitmore/videos" -Mode Phonics
 ```
 
-脚本将频道 `/videos` 列表按 Playlist 方式逐个下载。
+### 2.5 带 list 的 watch 链接（交互）
 
-### 2.5 只下载指定序号
+```text
+https://www.youtube.com/watch?v=VIDEO_ID&list=PLAYLIST_ID
+```
+
+运行后询问：
+
+```text
+1 = 只下当前这一集（默认）
+2 = 下载整个 playlist
+```
+
+仍可加 `-Mode`、`-MaxHeight` 等：
+
+```powershell
+.\download-movie.ps1 "https://www.youtube.com/watch?v=xxx&list=PLyyy" -Mode Phonics
+.\download-movie.ps1 "https://www.youtube.com/watch?v=xxx&list=PLyyy" -MaxHeight 1080 -PreferCodec av01
+```
+
+### 2.6 只下载指定序号
 
 ```powershell
 .\download-movie.ps1 "https://www.youtube.com/playlist?list=XXXX" -PlaylistIndexRange "3,5-8,12"
 ```
 
-支持：`8-11` / `8,10` / `8-11,15,20-22`
+格式：`8-11` / `8,10` / `8-11,15,20-22`
 
-### 2.6 指定分辨率与编码（跳过交互询问）
+### 2.7 指定分辨率与编码（Movie，跳过询问）
 
 ```powershell
-.\download-movie.ps1 "VIDEO_URL" -MaxHeight 2160 -PreferCodec av01
-.\download-movie.ps1 "PLAYLIST_URL" -MaxHeight 1080 -PreferCodec vp9
+.\download-movie.ps1 "URL" -MaxHeight 2160 -PreferCodec av01
 ```
 
 | 参数 | 可选值 | 默认 |
@@ -118,7 +133,7 @@ cd D:\yt-dlp
 | `-MaxHeight` | 2160 / 1440 / 1080 / 720 | 1080 |
 | `-PreferCodec` | av01 / vp9 / avc1 | av01 |
 
-### 2.7 从剪贴板取链接
+### 2.8 剪贴板
 
 ```powershell
 $url = Get-Clipboard
@@ -130,373 +145,241 @@ $url = Get-Clipboard
 ## 3. 整体工作流程
 
 ```text
-用户运行 download-movie.ps1
-        │
-        ├─ URL 是 playlist 或 @频道/videos
-        │     → 读取列表
-        │     → Movie 时只询问一次分辨率/编码
-        │     → 按 index 循环调用自身（单个视频）
-        │     → 输出成功/失败统计
-        │
-        └─ 单个视频
-              │
-              ▼
-        STEP 1  query-JSON-v4.ps1
-              │  在线查询、定目录、选 Opus 音频
-              │  写出 info.json + audio-selection.txt
-              │  打印 VIDEO / SUBTITLE / AUDIO 摘要
-              │
-              ▼
-        STEP 2  Format Selection
-              │  Phonics：固定规则
-              │  Movie：按 MaxHeight / PreferCodec 生成选择器
-              │
-              ▼
-        检查是否已有完整 MKV
-              │  Playlist：按 "003 - *.mkv" 前缀匹配
-              │  单视频：目录内有 mkv 即跳过
-              │  → 跳过则 exit 0
-              │
-              ▼
-        STEP 3  yt-dlp 下载（config_movie）
-              │
-              ▼
-        STEP 4  找最新 MKV
-              │
-              ▼
-        STEP 5  嵌入 English auto-generated 字幕
-              │
-              ▼
-        STEP 6  给字幕轨写 title
-              │
-              ▼
-        CLEANUP  删除临时 .vtt / 封面等
-              │
-              ▼
-        FINAL SUMMARY
+download-movie.ps1
+    │
+    ├─ 若 watch?v= + list= 且非递归子任务
+    │     → 询问：单集 / 整表（整表则改写为 playlist URL）
+    │
+    ├─ URL 为 playlist 或 @频道/videos
+    │     → 拉列表
+    │     → Movie：分辨率/编码只问一次，传给每个子任务
+    │     → 循环调用自身
+    │     → 输出成功/失败统计
+    │
+    └─ 单个视频
+          → STEP 1  query-JSON-v4（查询、目录、音频选择）
+          → STEP 2  格式选择器（Movie / Phonics）
+          → 已有完整 MKV？→ 跳过 exit 0
+          → STEP 3  yt-dlp 下载
+          → STEP 4  找 MKV
+          → STEP 5  English auto 字幕
+          → STEP 6  字幕 title
+          → CLEANUP 临时文件（LiteralPath，支持 [] 标题）
+          → FINAL SUMMARY
 ```
 
 ---
 
 ## 4. 格式选择逻辑
 
-### 4.1 Movie 模式
+### 4.1 Movie（与 Phonics 同结构，分辨率更高）
 
-交互或参数决定 `MaxHeight` 与 `PreferCodec` 后：
+由 `MaxHeight` + `PreferCodec` 决定。
 
-```text
-对每种优先编码：
-  独立流  高档 (MinHeight ≤ height ≤ MaxHeight, fps≤60)
-  独立流  低档 (height ≤ MinHeight, height≥480, fps≤60)
-对每种优先编码：
-  已合并  高档
-  已合并  低档
-最终兜底：b + 选定音频
-```
+**编码优先级：**
 
-| MaxHeight | MinHeight（高档下限） |
-|-----------|------------------------|
-| 2160      | 1440                   |
-| 1440      | 1080                   |
-| 1080      | 720                    |
-| 720       | 480                    |
+| PreferCodec | 主循环顺序 | 之后 |
+|-------------|------------|------|
+| av01（默认）| av01 → vp9 | 再 AVC1 各档 |
+| vp9         | vp9 → av01 | 再 AVC1 各档 |
+| avc1        | avc1 → av01 → vp9 | 不再重复挂 AVC1 |
 
-| PreferCodec | 编码顺序          |
-|-------------|-------------------|
-| av01（默认）| av01 → vp9        |
-| vp9         | vp9 → av01        |
-| avc1        | avc1 → av01 → vp9 |
-
-### 4.2 Phonics 模式
-
-固定规则（排除 HDR）：
+**选择顺序（对齐 Phonics）：**
 
 ```text
-AV1  独立 720p (481–720, ≤30fps, 非 HDR)
- ↓
-VP9  独立 720p
- ↓
-AV1  独立 480/360p (360–480, ≤30fps, 非 HDR)
- ↓
-VP9  独立 480/360p
- ↓
-AV1  已合并 720p
- ↓
-VP9  已合并 720p
- ↓
-AV1  已合并 480/360p
- ↓
-VP9  已合并 480/360p
- ↓
-AVC1 独立 480/360p
- ↓
-AVC1 已合并 480/360p
- ↓
-b[height<=720] + 选定音频
+1. 主编码 独立 最高档
+2. 主编码 独立 次高档
+3. 主编码 已合并 最高档
+4. 主编码 已合并 次高档
+5. （若主循环无 avc1）AVC1 独立/已合并 最高与次高
+6. b + 选定音频（兜底）
 ```
 
-对应过滤器示例：
+| MaxHeight | 最高档 | 次高档约 |
+|-----------|--------|----------|
+| 2160 | 1440 < h ≤ 2160 | h ≤ 1440 且 h ≥ 480 |
+| 1440 | 1080 < h ≤ 1440 | h ≤ 1080 且 h ≥ 480 |
+| 1080 | 720 < h ≤ 1080 | h ≤ 720 且 h ≥ 480 |
+| 720  | 480 < h ≤ 720  | h ≤ 480 且 h ≥ 480 |
+
+Movie 使用 `fps≤60`。
+
+### 4.2 Phonics
+
+固定、排除 HDR、`fps≤30`：
+
+```text
+AV1 独立 720 → VP9 独立 720
+ → AV1 独立 480/360 → VP9 独立 480/360
+ → 对应已合并四档
+ → AVC1 独立/已合并 480/360
+ → b[height<=720] + 音频
+```
+
+过滤器示例：
 
 ```powershell
 bv*[vcodec^=av01][height<=720][height>480][fps<=30][dynamic_range!*=HDR]
 bv*[vcodec^=av01][height<=480][height>=360][fps<=30][dynamic_range!*=HDR]
 ```
 
-**设计要点：**
-
-- 用 `height>480` / `height>=360` 区分 720 档与 480 档，避免 480p AV1 抢走 720p VP9
-- Phonics 明确排除 HDR
-- 独立流优先于已合并流
-
 ---
 
-## 5. 音频选择逻辑（query-JSON-v4.ps1）
+## 5. 音频选择（query-JSON-v4.ps1）
 
-### 5.1 核心字段
-
-| 字段        | 含义         | 重要性 |
-|-------------|--------------|--------|
-| format_id   | 音频格式 ID  | ⭐⭐⭐⭐⭐ |
-| language    | 语言代码     | ⭐⭐⭐⭐⭐ |
-| acodec      | 编码器       | ⭐⭐⭐⭐⭐ |
-| abr         | 码率         | ⭐⭐⭐⭐⭐ |
-| asr         | 采样率       | ⭐⭐⭐⭐ |
-| format_note | 含 DRC 等    | ⭐⭐⭐⭐⭐ |
-
-### 5.2 规则
-
-1. 只选 `acodec` 为 Opus 且 `vcodec=none` 的纯音频
-2. 用 URL 中 `xtags` 判断来源：ORIGINAL / DUBBED / DUBBED-AUTO / UNKNOWN
+1. 仅 Opus 且 `vcodec=none`
+2. xtags 判断 ORIGINAL / DUBBED / DUBBED-AUTO / UNKNOWN
 3. **排除 DUBBED-AUTO**
-4. 按 Source + Language 分组，每组选最优（优先无 DRC → abr → asr）
-5. 写入 `audio-selection.txt`：`SOURCE|lang|format_id`
-6. 无 Opus 时回退 `ba*`
+4. 按 Source+Language 分组，优先无 DRC → 高 abr → 高 asr
+5. 写入 `SOURCE|lang|format_id`；无 Opus 则 `ba*`
 
-`config_movie` 中 `--audio-multistreams` 支持多音轨同时嵌入。
-
----
-
-## 6. 字幕逻辑
-
-### 6.1 配置（config_movie）
+查询参数含：
 
 ```text
---write-subs
---sub-langs "all"
---sub-format "vtt/best"
---embed-subs
---sleep-subtitles 2
+--dump-single-json
+--ignore-no-formats-error    # 避免默认选格式失败导致 query 中断
+--extractor-args "youtube:player_client=default,web_embedded;skip=translated_subs"
 ```
 
-### 6.2 脚本后处理
+---
+
+## 6. 字幕与清理
+
+**config_movie：** `--write-subs --sub-langs all --sub-format vtt/best --embed-subs`
 
 | 步骤 | 作用 |
 |------|------|
-| STEP 5 | 下载并嵌入 `en-orig`（English auto-generated） |
-| STEP 6 | 按 info.json 的 name 写字幕轨 title |
-| CLEANUP | 删除外部 .vtt / 封面等 |
+| STEP 5 | 嵌入 en-orig（English auto-generated） |
+| STEP 6 | 按 info.json 写字幕轨 title |
+| CLEANUP | 删除同名 .webp/.jpg/.png/.vtt/.srt/.description |
 
-### 6.3 注意
-
-- 临时 `.vtt` 文件名可能出现 `en-US.nl-NL` 等（yt-dlp MoveFiles），**不影响** MKV 内轨道元数据
-- 播放器显示的是 `language` + `title`，不是临时文件名
-- STEP 5 重复运行可能叠加英文字幕 → 依赖「已完成跳过」
+CLEANUP 使用目录枚举 + **LiteralPath**，避免标题中 `[Chinese Dubbed]` 等方括号导致删不掉缩略图。
 
 ---
 
-## 7. 已完成视频跳过
+## 7. 已完成跳过
 
-在 STEP 2 与 STEP 3 之间：
+| 场景 | 规则 |
+|------|------|
+| Playlist（有序号） | 仅当存在 `003 - *.mkv` 这类**当前序号前缀**文件时跳过 |
+| 单视频 | 该标题目录内已有 `.mkv` 则跳过 |
 
-| 场景 | 判断方式 |
-|------|----------|
-| Playlist（PlaylistIndex > 0） | 只认 `003 - *.mkv` 这类带当前序号前缀的文件 |
-| 单视频 | 该视频目录内存在任意 `.mkv` 即跳过 |
-
-- 跳过 → `exit 0`（Playlist 计为成功）
-- 不完整残留 → 依赖 yt-dlp `--continue` 续传
-
-STEP 1 / STEP 2 仍会执行（查询较快）。
+避免「文件夹里已有一集 mkv 导致整表全跳过」。
 
 ---
 
-## 8. Playlist 最终统计
+## 8. Playlist 统计
 
 ```text
-PLAYLIST COMPLETE
-Playlist      : xxx
-Total items   : 12
-Succeeded     : 10
-Failed        : 2
-
-=== DETAILED RESULTS ===
-INDEX  STATUS  ID           TITLE
-1      OK      abc123       Video A
-2      FAILED  def456       Video B
+Succeeded / Failed + DETAILED RESULTS（INDEX / STATUS / ID / TITLE）
 ```
 
-被 `-PlaylistIndexRange` 跳过的条目不进入统计。
+`-PlaylistIndexRange` 未选中的条目不计入。
 
 ---
 
-## 9. 脚本参数一览
+## 9. 脚本参数
 
 | 参数 | 说明 | 默认 |
 |------|------|------|
-| `Url` | 视频 / Playlist / 频道 URL（必填） | — |
-| `PlaylistTitle` | 内部递归传入，用户一般不填 | `""` |
-| `Mode` | `Movie` / `Phonics` | `Movie` |
-| `PlaylistIndex` | 内部递归传入的序号 | `0` |
-| `PlaylistIndexRange` | 只下载指定序号 | `""` |
-| `MaxHeight` | Movie 最高分辨率 | `0`（触发询问） |
-| `PreferCodec` | Movie 编码偏好 | `""`（触发询问） |
+| `Url` | 视频 / playlist / 频道 URL | 必填 |
+| `Mode` | Movie / Phonics | Movie |
+| `PlaylistIndexRange` | 指定序号 | 空 |
+| `MaxHeight` | Movie 最高分辨率 | 0 → 询问 |
+| `PreferCodec` | av01 / vp9 / avc1 | 空 → 询问 |
+| `PlaylistTitle` / `PlaylistIndex` | 内部递归用 | 一般不手填 |
 
 ---
 
-## 10. 配置文件要点（config_movie）
+## 10. config_movie 要点
 
 ```text
 --remote-components ejs:github
 --extractor-args "youtube:player_client=default,web_embedded;skip=translated_subs"
 --audio-multistreams
 --merge-output-format mkv
---write-subs
---sub-langs "all"
---sub-format "vtt/best"
---embed-subs
---write-thumbnail
---embed-thumbnail
---embed-chapters
---embed-metadata
---continue
---ignore-errors
---sleep-interval 5
---max-sleep-interval 10
+--write-subs --sub-langs "all" --sub-format "vtt/best" --embed-subs
+--write-thumbnail --embed-thumbnail --embed-chapters --embed-metadata
+--continue --ignore-errors
+--sleep-interval 5 --max-sleep-interval 10
 ```
 
 ---
 
-## 11. VIDEO FORMAT SUMMARY 显示字段
+## 11. VIDEO FORMAT SUMMARY 列
 
-查询时打印（仅展示，不参与选择）：
-
-| 列 | 含义 |
-|----|------|
-| ID | format_id |
-| CODEC | vcodec |
-| RESOLUTION | 宽x高 |
-| FPS | 帧率 |
-| VBR | 视频码率（无则用 tbr 近似） |
-| SIZE | filesize / filesize_approx |
-| HDR | dynamic_range 或推断 SDR/HDR |
-| TYPE | video-only / video+audio |
+ID / CODEC / RESOLUTION / FPS / **VBR** / **SIZE** / **HDR** / TYPE  
+（仅显示，不参与选择）
 
 ---
 
-## 12. 常用手动命令
-
-### 查看在线格式
+## 12. 常用命令
 
 ```powershell
-.\yt-dlp.exe -F --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "VIDEO_URL"
-```
+# 在线格式
+.\yt-dlp.exe -F --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "URL"
 
-### 查看字幕
+# 字幕列表
+.\yt-dlp.exe --list-subs --sub-langs "en.*,zh.*" --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "URL"
 
-```powershell
-.\yt-dlp.exe --list-subs --sub-langs "en.*,zh.*" --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "VIDEO_URL"
-```
+# 仅查询
+.\query-JSON-v4.ps1 "URL" -Mode Phonics
 
-### 仅查询 JSON
-
-```powershell
-.\query-JSON-v4.ps1 "VIDEO_URL" -Mode Phonics
-```
-
-### 检查本地 MKV 字幕轨道
-
-```powershell
+# 本地字幕轨
 .\ffprobe -v error -select_streams s -show_entries stream_tags=language,title -of csv=p=0 "完整路径\文件.mkv"
-```
 
-### 检查脚本语法
-
-```powershell
+# 语法检查
 $tokens=$null; $errors=$null
-[System.Management.Automation.Language.Parser]::ParseFile(
-  "D:\yt-dlp\download-movie.ps1", [ref]$tokens, [ref]$errors
-) | Out-Null
-$errors | ForEach-Object {
-  "Line $($_.Extent.StartLineNumber), Col $($_.Extent.StartColumnNumber): $($_.Message)"
-}
+[System.Management.Automation.Language.Parser]::ParseFile("D:\yt-dlp\yt-dlp-git\download-movie.ps1",[ref]$tokens,[ref]$errors) | Out-Null
+$errors
 ```
-
-无输出即语法通过。
 
 ---
 
-## 13. --download-archive（可选）
+## 13. GitHub 同步（简要）
 
-```text
---download-archive "D:\yt-dlp\download-archive.txt"
+- 仓库示例：`https://github.com/Bob-maxb/yt-dlp-scripts`
+- **不要**提交 `cookies.txt`、exe、视频文件（用 `.gitignore`）
+- 更新后：
+
+```powershell
+cd D:\yt-dlp\yt-dlp-git
+git add .
+git commit -m "说明改动"
+git push
 ```
-
-- 成功下载后写入视频 ID
-- 下次同一 ID 直接跳过
-- 建议绝对路径；可与「已有 MKV 跳过」双保险
-
-当前脚本默认未启用。
 
 ---
 
 ## 14. 故障排查
 
-| 现象 | 可能原因 | 处理 |
-|------|----------|------|
-| 480p AV1 抢在 720p VP9 前 | 旧版 `height<=720` 过宽 | 使用 `height>480` / `height>=360` |
-| Playlist 有一个 mkv 就全跳过 | 跳过逻辑未按序号前缀 | 使用 `003 - *.mkv` 匹配 |
-| 重复英文字幕 | 对已完成文件再跑 STEP 5 | 依赖已完成跳过 |
-| 选到 format 18 等低画质 | 高档过滤过严，全部不匹配后落到 `b+` | 放宽 height/fps 或检查实际可用格式 |
-| 下载失败 / JS challenge | cookies 过期 | 更新 cookies.txt |
-| ffprobe Permission denied | 路径是文件夹不是文件 | 使用完整 `.mkv` 路径 |
-| Playlist 每个视频都问分辨率 | 未把 MaxHeight 传给子进程 | 确认递归调用带 `-MaxHeight` `-PreferCodec` |
+| 现象 | 处理 |
+|------|------|
+| query 报 Requested format is not available | 查询加 `--ignore-no-formats-error` |
+| 480p 抢在 720p 前 | 使用 height 分档（>480 / >=360） |
+| Playlist 一集存在就全跳过 | 按 `003 -` 前缀匹配 |
+| 残留 .webp | CLEANUP 用 LiteralPath；标题含 `[]` 时旧逻辑会失败 |
+| 找不到 download-movie.ps1 | 在脚本实际目录执行，或写全路径 |
+| git 不是内部或外部命令 | 安装 Git for Windows 并重开终端 |
+| push 前 Author identity unknown | `git config --global user.name` / `user.email` |
 
 ---
 
 ## 15. 设计原则
 
-1. **容器固定 MKV** — 多音轨、多字幕、章节支持最好  
-2. **音频固定 Opus** — 效率高；排除自动配音轨  
-3. **字幕 VTT 并嵌入** — 质量与兼容平衡  
-4. **Phonics ≤30fps、偏 720/480、排除 HDR** — 学习向体积控制  
-5. **Movie 可交互选分辨率/编码** — Playlist 只问一次  
-6. **已完成可安全重跑** — 按文件/序号跳过，避免重复封装  
+1. 容器 MKV；音频 Opus；字幕 VTT 嵌入  
+2. Phonics：≤30fps、偏 720/480、排除 HDR  
+3. Movie：可交互分辨率/编码；Playlist 只问一次  
+4. 选择顺序：独立高 → 独立次 → 合并高 → 合并次 → AVC1 → 兜底  
+5. 已完成可安全重跑；特殊字符文件名可清理  
 
 ---
 
-## 16. 补充备忘
+## 16. 补充
 
-**编码优先级：** AV1 > VP9 > AVC1（H.264）  
-**音频优先级：** Opus > AAC  
-
-**体积粗算（码率 kbps、时长秒）：**
-
-```text
-文件大小 (MiB) ≈ 总码率(kbps) × 时长(秒) / 8388.608
-总码率 ≈ 视频码率 + 音频码率
-```
-
-**容器/字幕测试结论：**
-
-- 优选：`视频 + Opus + MKV + VTT 嵌入`
-- iPhone 对 AV1 支持有限；MKV+Opus 在桌面播放器表现最佳
-
-**自动关机（可选）：**
-
-```powershell
-if ($LASTEXITCODE -eq 0) { shutdown /s /t 60 }
-# 取消：shutdown /a
-```
+- 体积粗算：`MiB ≈ 总码率(kbps) × 秒 / 8388.608`  
+- 优选实测：视频 + Opus + MKV + VTT  
+- 可选关机：`shutdown /s /t 60`（取消：`shutdown /a`）
 
 ---
 
@@ -504,13 +387,13 @@ if ($LASTEXITCODE -eq 0) { shutdown /s /t 60 }
 
 | 文件 | 职责 |
 |------|------|
-| `download-movie.ps1` | 主流程、Playlist/频道循环、格式选择、下载、后处理、统计、跳过 |
-| `query-JSON-v4.ps1` | 在线查询、目录计算、音频选择、格式/字幕摘要展示 |
+| `download-movie.ps1` | 链接解析、Playlist/频道、格式选择、下载、后处理、跳过、统计 |
+| `query-JSON-v4.ps1` | 查询 JSON、目录、音频选择、格式/字幕摘要 |
 | `config_movie` | yt-dlp 全局下载与封装参数 |
 
 ---
 
-*文档结束。脚本有新增参数或规则变更时，请同步修订本节。*
+*文档结束。脚本再变更时请同步修订本指南。*
 
 ## 16. Appendy
 AV1优于VP9优于AVC1(H.264)
@@ -561,7 +444,35 @@ yt-dlp原生命令
 查询在线视频编码coding
 .\yt-dlp.exe -F --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "https://www.youtube.com/watch?v=SkorusaTwbw"; .\yt-dlp.exe --list-subs --sub-langs "en.*,zh.*" --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "https://www.youtube.com/watch?v=SkorusaTwbw"
 
+查询本地视频编码
+"════════════════════════════════════════════════════════════════════════════════════════════════";"FILE                          SIZE     CONT   VIDEO RES   FPS  VBR      AUDIO                         SUB";"════════════════════════════════════════════════════════════════════════════════════════════════";Get-ChildItem "D:\03 Media\Movies & TV\Single Files\2022-04-25\*.*" | Where-Object {$_.Extension -in ".mp4",".mkv",".webm"} | Sort Name | ForEach-Object {$v=&"D:\yt-dlp\ffprobe.exe" -v error -select_streams v:0 -show_entries "stream=codec_name,height,r_frame_rate,bit_rate" -of csv=p=0 $_.FullName;$a=&"D:\yt-dlp\ffprobe.exe" -v error -select_streams a -show_entries "stream=codec_name,bit_rate:stream_tags=language" -of csv=p=0 $_.FullName;$s=&"D:\yt-dlp\ffprobe.exe" -v error -select_streams s -show_entries "stream_tags=language" -of csv=p=0 $_.FullName;$v=$v -split ',';$video=$v[0].ToUpper();$res=$v[1]+"p";$fps=if($v[2]-match "/"){[math]::Round(($v[2]-split'/')[0]/($v[2]-split'/')[1])}else{"?"};$vbr=if($v[3]-match '^\d+$'){([math]::Round([int]$v[3]/1000)).ToString()+"k"}else{"N/A"};$aud=if(!$a){"-"}else{($a|ForEach-Object{$x=$_-split ',';$abr=if($x[1]-match '^\d+$'){([math]::Round([int]$x[1]/1000)).ToString()+"k"}else{"N/A"};$lang=if($x.Count -gt 2 -and $x[2]){$x[2]}else{"und"};"$($x[0].ToUpper()) $abr $lang"})-join ";"};$sub=if(!$s){"-"}else{($s -join ",").ToUpper()};$size=[math]::Round($_.Length/1MB,1);"{0,-30}{1,-8}{2,-6}{3,-6}{4,-6}{5,-5}{6,-8}{7,-30}{8}" -f $_.Name,$($size.ToString()+"MB"),$_.Extension.Trim('.').ToUpper(),$video,$res,$fps,$vbr,$aud,$sub};"════════════════════════════════════════════════════════════════════════════════════════════════"
+
 
 检查脚本语法的命令
 $tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile("D:\yt-dlp\query-JSON-v4.ps1",[ref]$tokens,[ref]$errors) | Out-Null; $errors | ForEach-Object { "Line $($_.Extent.StartLineNumber), Col $($_.Extent.StartColumnNumber): $($_.Message)" }
 没有任何输出：语法检查通过。
+
+
+1. 音频最核心的几个字段
+
+在 -F 输出里，你以后重点看这些：
+
+字段	含义	对我们有多重要
+format_id	音频格式 ID	⭐⭐⭐⭐⭐
+language	音频语言代码	⭐⭐⭐⭐⭐
+acodec	音频编码器	⭐⭐⭐⭐⭐
+abr	平均音频码率	⭐⭐⭐⭐⭐
+audio_channels	声道数	⭐⭐⭐⭐
+asr	采样率 Hz	⭐⭐⭐⭐
+format_note	YouTube 提供的附加说明	⭐⭐⭐⭐⭐
+aext	音频扩展名/容器	⭐⭐⭐
+protocol	下载协议	⭐⭐⭐
+filesize	文件大小	⭐⭐
+quality	yt-dlp 的质量排序字段	⭐⭐⭐
+lang	yt-dlp 的语言偏好排序字段	⭐⭐⭐⭐
+
+
+-F / --list-formats	列出格式	人查看
+-f	选择格式下载	下载
+-J / --dump-json	输出完整JSON	程序分析
+--write-info-json	保存JSON文件	以后离线分析
