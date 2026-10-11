@@ -319,14 +319,34 @@ ID / CODEC / RESOLUTION / FPS / **VBR** / **SIZE** / **HDR** / TYPE
 # 在线格式
 .\yt-dlp.exe -F --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "URL"
 
+查询在线视频编码及字幕coding
+.\yt-dlp.exe -F --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "https://www.youtube.com/watch?v=SkorusaTwbw"; .\yt-dlp.exe --list-subs --sub-langs "en.*,zh.*" --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "https://www.youtube.com/watch?v=SkorusaTwbw"
+
 # 字幕列表
 .\yt-dlp.exe --list-subs --sub-langs "en.*,zh.*" --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "URL"
 
 # 仅查询
 .\query-JSON-v4.ps1 "URL" -Mode Phonics
 
+# 查看本地流信息
 # 本地字幕轨
 .\ffprobe -v error -select_streams s -show_entries stream_tags=language,title -of csv=p=0 "完整路径\文件.mkv"
+
+# 查询视频格式、分辨率、帧率、码率
+& "D:\yt-dlp\ffprobe.exe" -v error -select_streams v -show_entries stream=index,codec_name,width,height,r_frame_rate,bit_rate -of table "你的文件名.mkv"
+
+# 查询音频格式、声道、采样率、码率和语言
+& "D:\yt-dlp\ffprobe.exe" -v error -select_streams a -show_entries "stream=index,codec_name,channels,sample_rate,bit_rate:stream_tags=language,title" -of table "你的文件名.mkv"
+
+# 查询内嵌字幕的格式、语言和名称
+& "D:\yt-dlp\ffprobe.exe" -v error -select_streams s -show_entries "stream=index,codec_name:stream_tags=language,title,handler_name" -of default=noprint_wrappers=1 "你的文件名.mkv"
+
+# 查看全部流信息
+& "D:\yt-dlp\ffprobe.exe" -v error -show_entries "stream=index,codec_type,codec_name,width,height,r_frame_rate,bit_rate,channels,sample_rate:stream_tags=language,title,handler_name" -of table "你的文件名.mkv"
+
+查询本地目录下所有视频编码及字母信息
+"════════════════════════════════════════════════════════════════════════════════════════════════";"FILE                          SIZE     CONT   VIDEO RES   FPS  VBR      AUDIO                         SUB";"════════════════════════════════════════════════════════════════════════════════════════════════";Get-ChildItem "D:\03 Media\Movies & TV\Single Files\2022-04-25\*.*" | Where-Object {$_.Extension -in ".mp4",".mkv",".webm"} | Sort Name | ForEach-Object {$v=&"D:\yt-dlp\ffprobe.exe" -v error -select_streams v:0 -show_entries "stream=codec_name,height,r_frame_rate,bit_rate" -of csv=p=0 $_.FullName;$a=&"D:\yt-dlp\ffprobe.exe" -v error -select_streams a -show_entries "stream=codec_name,bit_rate:stream_tags=language" -of csv=p=0 $_.FullName;$s=&"D:\yt-dlp\ffprobe.exe" -v error -select_streams s -show_entries "stream_tags=language" -of csv=p=0 $_.FullName;$v=$v -split ',';$video=$v[0].ToUpper();$res=$v[1]+"p";$fps=if($v[2]-match "/"){[math]::Round(($v[2]-split'/')[0]/($v[2]-split'/')[1])}else{"?"};$vbr=if($v[3]-match '^\d+$'){([math]::Round([int]$v[3]/1000)).ToString()+"k"}else{"N/A"};$aud=if(!$a){"-"}else{($a|ForEach-Object{$x=$_-split ',';$abr=if($x[1]-match '^\d+$'){([math]::Round([int]$x[1]/1000)).ToString()+"k"}else{"N/A"};$lang=if($x.Count -gt 2 -and $x[2]){$x[2]}else{"und"};"$($x[0].ToUpper()) $abr $lang"})-join ";"};$sub=if(!$s){"-"}else{($s -join ",").ToUpper()};$size=[math]::Round($_.Length/1MB,1);"{0,-30}{1,-8}{2,-6}{3,-6}{4,-6}{5,-5}{6,-8}{7,-30}{8}" -f $_.Name,$($size.ToString()+"MB"),$_.Extension.Trim('.').ToUpper(),$video,$res,$fps,$vbr,$aud,$sub};"════════════════════════════════════════════════════════════════════════════════════════════════"
+
 
 # 语法检查
 $tokens=$null; $errors=$null
