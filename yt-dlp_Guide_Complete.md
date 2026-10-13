@@ -136,10 +136,12 @@ https://www.youtube.com/watch?v=VIDEO_ID&list=PLAYLIST_ID
 ### 2.8 剪贴板
 
 ```powershell
-$url = Get-Clipboard
+$url = (Get-Clipboard).Trim()
+$url
 .\download-movie.ps1 $url -Mode Phonics
 ```
-
+两行命令一起运行
+$url = Get-Clipboard; .\download-movie.ps1 $url -Mode Phonics
 ---
 
 ## 3. 整体工作流程
@@ -227,11 +229,33 @@ bv*[vcodec^=av01][height<=480][height>=360][fps<=30][dynamic_range!*=HDR]
 
 ## 5. 音频选择（query-JSON-v4.ps1）
 
-1. 仅 Opus 且 `vcodec=none`
-2. xtags 判断 ORIGINAL / DUBBED / DUBBED-AUTO / UNKNOWN
-3. **排除 DUBBED-AUTO**
-4. 按 Source+Language 分组，优先无 DRC → 高 abr → 高 asr
-5. 写入 `SOURCE|lang|format_id`；无 Opus 则 `ba*`
+**优先级：**
+
+1. 纯 Opus（`acodec` 以 opus 开头且 `vcodec=none`）
+2. 若无 Opus → 纯 AAC / m4a（`mp4a*` / `aac*` 且 `vcodec=none`）
+3. 仍无独立音轨 → selection 文件写空，主脚本使用 `ba*` 回退
+
+**其它规则（不变）：**
+1. xtags 判断 ORIGINAL / DUBBED / DUBBED-AUTO / UNKNOWN
+2. **排除 DUBBED-AUTO**
+3. 按 Source+Language 分组，优先无 DRC → 高 abr → 高 asr
+4. 写入 `SOURCE|lang|format_id`；无 Opus 则 `ba*`
+
+**selection 文件：**
+
+- 无论是否选中音轨，都用  
+  `Set-Content -LiteralPath $SelectionFile -Value $Lines -Encoding UTF8`  
+  写出（空数组也会生成空文件）
+- 避免旧写法 `$Lines | Set-Content ...` 在空数组时不创建文件，导致  
+  `ERROR: Selection file not found`
+
+**多语言：**
+
+| 情况 | 行为 |
+|------|------|
+| 有 Opus（或 AAC）多语言独立轨 | 仍按语言分组多选，配合 `--audio-multistreams` 多轨下载 |
+| 仅 `ba*` 回退 | 通常只有 1 条“最佳音频” |
+
 
 查询参数含：
 
@@ -352,7 +376,12 @@ ID / CODEC / RESOLUTION / FPS / **VBR** / **SIZE** / **HDR** / TYPE
 $tokens=$null; $errors=$null
 [System.Management.Automation.Language.Parser]::ParseFile("D:\yt-dlp\yt-dlp-git\download-movie.ps1",[ref]$tokens,[ref]$errors) | Out-Null
 $errors
+
+# 备份脚本命令
+PS D:\yt-dlp> copy-Item "D:\yt-dlp\query-JSON-v4.ps1" "D:\yt-dlp\query-JSON-v4-20261013-正常版.ps1"
+PS D:\yt-dlp> copy-Item "D:\yt-dlp\download-movie.ps1" "D:\yt-dlp\download-movie-20261009-正常版.ps1"  
 ```
+
 
 ---
 

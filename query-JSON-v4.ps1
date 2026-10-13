@@ -202,6 +202,27 @@ $AudioFormats = @(
     }
 )
 
+
+# 无 Opus 时：退而求其次，用纯 AAC / m4a 音轨
+if ($AudioFormats.Count -eq 0) {
+    $AudioFormats = @(
+        $Info.formats |
+        Where-Object {
+            $_.vcodec -eq "none" -and
+            $_.acodec -and
+            $_.acodec -ne "none" -and (
+                $_.acodec -like "mp4a*" -or
+                $_.acodec -like "aac*"
+            )
+        }
+    )
+    if ($AudioFormats.Count -gt 0) {
+        Write-Host "WARNING: No Opus; using AAC audio tracks." -ForegroundColor Yellow
+    }
+}
+
+
+
 Write-Host "Video ID       : $VideoId"
 Write-Host "Playlist       : $PlaylistTitle"
 Write-Host "Download dir   : $DownloadDir"
@@ -571,17 +592,37 @@ Write-Host "Total audio streams     : $($Candidates.Count)"
  
 # $Lines | Set-Content -LiteralPath $SelectionFile -Encoding UTF8
 
-$Lines = @(
-    foreach ($A in $Selected) {  
-        if ($A.Source -eq "DUBBED-AUTO") { 
-            continue 
-        } 
+# $Lines = @(
+#     foreach ($A in $Selected) {  
+#         if ($A.Source -eq "DUBBED-AUTO") { 
+#             continue 
+#         } 
  
-        "$($A.Source)|$($A.Language)|$($A.FormatId)"  
+#         "$($A.Source)|$($A.Language)|$($A.FormatId)"  
+#     }
+# )
+
+# $Lines | Set-Content -LiteralPath $SelectionFile -Encoding UTF8
+
+
+
+$Lines = @(
+    foreach ($A in $Selected) {
+        if ($A.Source -eq "DUBBED-AUTO") {
+            continue
+        }
+        "$($A.Source)|$($A.Language)|$($A.FormatId)"
     }
 )
 
-$Lines | Set-Content -LiteralPath $SelectionFile -Encoding UTF8
+if ($null -eq $Lines) { $Lines = @() }
+
+# 空数组也会创建文件，避免主脚本报 Selection file not found
+Set-Content -LiteralPath $SelectionFile -Value $Lines -Encoding UTF8
+
+
+
+
 
 # ========================================
 # 显示最终选择
