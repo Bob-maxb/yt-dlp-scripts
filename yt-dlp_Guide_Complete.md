@@ -1,11 +1,11 @@
 # yt-dlp 下载项目完整指南
 
-> 版本：Complete v4  
+> 版本：Complete v5  
 > 适用脚本：  
 > - **YouTube：** `download-youtube.ps1` / `query-youtube.ps1` / `config_youtube`  
 >   （旧名仍可能使用：`download-movie.ps1` / `query-JSON-v4.ps1` / `config_movie`）  
 > - **其它网站：** `download-generic.ps1` / `query-generic.ps1` / `config_generic`  
-> 更新日期：2026-10
+> 更新日期：2026-10-28
 
 ---
 
@@ -20,6 +20,9 @@
 - 已完成 MKV 跳过、Playlist 成功/失败统计
 - 字幕嵌入、临时文件清理（兼容标题中的 `[]` 等特殊字符）
 - **Generic 脚本：** 非 YouTube 站点单视频 / 简易 Playlist（逻辑对齐 YouTube 版）
+- **交互 Mode：** 未指定 `-Mode` 时询问 Movie / Phonics（YouTube + Generic）
+- **Generic Adult：** 可选保存到 `D:\03 Media\Adult`（默认否）
+- **Generic 成品：** 识别 `mkv` / `mp4` / `webm`（跳过与 STEP 4）
 
 **优选组合：**
 
@@ -68,9 +71,10 @@ $Cookies     = Join-Path $Root "cookies.txt"
 
 **媒体保存位置：**
 
-| Mode    | 根目录                            |
-|---------|-----------------------------------|
-| Movie   | `D:\03 Media\Movies & TV\`        |
+| Mode / 选项 | 根目录 |
+|-------------|--------|
+| Movie（默认） | `D:\03 Media\Movies & TV\` |
+| Movie + Adult（仅 generic） | `D:\03 Media\Adult\` |
 | Phonics | `D:\10 Learning\English\Phonics\` |
 
 | 类型 | 路径 |
@@ -101,7 +105,15 @@ cd D:\yt-dlp\youtube
 .\download-youtube.ps1 "https://www.youtube.com/watch?v=XXXX"
 ```
 
-会询问最高分辨率与编码（直接回车 = 1080p + AV1）。
+未加 `-Mode` 时会先问：
+
+```text
+Download mode?
+  1 = Movie   (default)
+  2 = Phonics
+```
+
+Movie 时再询问最高分辨率与编码（直接回车 = 1080p + AV1）。
 
 ### 2.2 Phonics
 
@@ -176,13 +188,14 @@ $url
 $url = Get-Clipboard; .\download-youtube.ps1 $url -Mode Phonics
 ```
 
-### 2.9 其它网站（generic）【新增】
+### 2.9 其它网站（generic）
 
 ```powershell
 cd D:\yt-dlp\generic
 .\download-generic.ps1 "https://www.bilibili.com/video/BVxxxx"
 .\download-generic.ps1 "URL" -Mode Phonics
 .\download-generic.ps1 "URL" -MaxHeight 1080
+.\download-generic.ps1 "URL" -Adult
 ```
 
 先确认站点支持：
@@ -198,6 +211,18 @@ D:\yt-dlp\yt-dlp.exe -F "视频URL"
 - 非 YouTube 不加 youtube `extractor-args`
 - Playlist：若 yt-dlp 能返回 `entries` 则循环；否则按单 URL
 - 日常 YouTube 仍建议用 `youtube\` 下脚本
+- **Mode 交互：** 未写 `-Mode` 时询问 1=Movie / 2=Phonics（与 YouTube 相同）
+- **Adult 交互（仅 Movie）：** 默认 N → `Movies & TV`；Y 或 `-Adult` → `D:\03 Media\Adult`
+- **成品扩展名：** 跳过与 STEP 4 识别 `mkv` / `mp4` / `webm`（部分站只有 HLS→mp4）
+
+### 2.10 交互询问汇总（v5）
+
+| 询问 | YouTube | Generic | 何时跳过 |
+|------|---------|---------|----------|
+| Mode（Movie/Phonics） | 有 | 有 | 已传 `-Mode` |
+| Adult（是否成人目录） | 无 | 有（仅 Movie） | 已传 `-Adult`，或 Mode=Phonics |
+| 单集/整表（watch+list） | 有 | 无 | 递归子任务已带 PlaylistTitle |
+| 分辨率/编码 | Movie 有 | Movie 有 | 已传 `-MaxHeight` / `-PreferCodec` |
 
 ---
 
@@ -205,6 +230,8 @@ D:\yt-dlp\yt-dlp.exe -F "视频URL"
 
 ```text
 download-youtube.ps1
+    │
+    ├─ 未指定 -Mode → 询问 Movie / Phonics（默认 Movie）
     │
     ├─ 若 watch?v= + list= 且非递归子任务
     │     → 询问：单集 / 整表（整表则改写为 playlist URL）
@@ -227,7 +254,7 @@ download-youtube.ps1
           → FINAL SUMMARY
 ```
 
-**generic 流程：** 与上类似；Playlist 为可选启发式；格式链含通用 `height` 兜底；ffmpeg 调用已做 stderr 静默（兼容 Windows PowerShell 5.1）。
+**generic 流程：** 与上类似；另有 Adult 目录询问；Playlist 为可选启发式；格式链含通用 `height` 兜底；成品认 mkv/mp4/webm；ffmpeg 调用已做 stderr 静默（兼容 Windows PowerShell 5.1）。
 
 ---
 
@@ -362,7 +389,10 @@ CLEANUP 使用目录枚举 + **LiteralPath**，避免标题中 `[Chinese Dubbed]
 | 场景 | 规则 |
 |------|------|
 | Playlist（有序号） | 仅当存在 `003 - *.mkv` 这类**当前序号前缀**文件时跳过 |
-| 单视频 | 该标题目录内已有 `.mkv` 则跳过 |
+| 单视频 | 该标题目录内已有成品则跳过 |
+
+- **YouTube：** 通常为 `.mkv`
+- **Generic：** `.mkv` / `.mp4` / `.webm` 均视为已完成
 
 避免「文件夹里已有一集 mkv 导致整表全跳过」。
 
@@ -388,10 +418,11 @@ Succeeded / Failed + DETAILED RESULTS（INDEX / STATUS / ID / TITLE）
 | `MaxHeight` | Movie 最高分辨率 | 0 → 询问 |
 | `PreferCodec` | av01 / vp9 / avc1 | 空 → 询问 |
 | `PlaylistTitle` / `PlaylistIndex` | 内部递归用 | 一般不手填 |
+| `Adult`（仅 generic） | 保存到 `D:\03 Media\Adult` | 关；可交互选 Y |
 
 ---
 
-## 10. config_movie 要点
+## 10. config_youtube 要点
 
 ```text
 --remote-components ejs:github
@@ -462,8 +493,8 @@ $tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::Pa
 没有任何输出：语法检查通过。
 
 # 备份脚本命令
-PS D:\yt-dlp> copy-Item "D:\yt-dlp\query-JSON-v4.ps1" "D:\yt-dlp\query-JSON-v4-20261013-正常版.ps1"
-PS D:\yt-dlp> copy-Item "D:\yt-dlp\download-movie.ps1" "D:\yt-dlp\download-movie-20261009-正常版.ps1"  
+PS D:\yt-dlp> copy-Item "D:\yt-dlp\youtube\query-youtube.ps1" "D:\yt-dlp\youtube\query-youtube-20261028-正常版.ps1"
+PS D:\yt-dlp> copy-Item "D:\yt-dlp\youtube\download-youtube.ps1" "D:\yt-dlp\youtube\download-youtube-20261028-正常版.ps1"
 
 
 # 本地视频查询脚本的使用方法：
@@ -575,7 +606,8 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 3. Movie：可交互分辨率/编码；Playlist 只问一次  
 4. 选择顺序：独立高 → 独立次 → 合并高 → 合并次 → AVC1 → 兜底  
 5. 已完成可安全重跑；特殊字符文件名可清理  
-6. YouTube / Generic 分目录；exe 与 cookies 固定在 `D:\yt-dlp\`
+6. YouTube / Generic 分目录；exe 与 cookies 固定在 `D:\yt-dlp\`  
+7. 未指定 `-Mode` 时交互选择；Generic 可再选 Adult 根目录  
 
 ---
 
@@ -663,4 +695,4 @@ download 脚本内 `$Config`、`$QueryScript` 必须与**实际文件名**一致
 
 ---
 
-*文档结束（Complete v4）。脚本再变更时请同步修订本指南。*
+*文档结束（Complete v5）。脚本再变更时请同步修订本指南。*

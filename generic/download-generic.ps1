@@ -23,7 +23,9 @@ param(
 
     [int]$MaxHeight = 0,
 
-    [string]$PreferCodec = ""
+    [string]$PreferCodec = "",
+
+    [switch]$Adult
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,9 +34,42 @@ $Root         = "D:\yt-dlp"
 $YtDlp        = Join-Path $Root "yt-dlp.exe"
 $FFmpeg       = Join-Path $Root "ffmpeg.exe"
 $FFprobe      = Join-Path $Root "ffprobe.exe"
-$Config      = Join-Path $PSScriptRoot "config_generic"
-$QueryScript = Join-Path $PSScriptRoot "query-generic.ps1"
+$Config       = Join-Path $PSScriptRoot "config_generic"
+$QueryScript  = Join-Path $PSScriptRoot "query-generic.ps1"
 $Cookies      = Join-Path $Root "cookies.txt"
+
+# Mode：命令行未指定 -Mode 时才询问（默认 Movie）
+if (-not $PSBoundParameters.ContainsKey('Mode')) {
+    Write-Host ""
+    Write-Host "Download mode?" -ForegroundColor Cyan
+    Write-Host "  1 = Movie   (default)  -> D:\03 Media\Movies & TV 或 Adult"
+    Write-Host "  2 = Phonics            -> D:\10 Learning\English\Phonics"
+    $ModeChoice = Read-Host "Select [1-2] (default 1)"
+    if ($ModeChoice -eq "2") {
+        $Mode = "Phonics"
+        Write-Host "Mode: Phonics" -ForegroundColor Yellow
+    }
+    else {
+        $Mode = "Movie"
+        Write-Host "Mode: Movie" -ForegroundColor Yellow
+    }
+}
+
+# Adult：仅 Movie；默认 N = Movies & TV
+if ($Mode -eq "Movie" -and -not $Adult) {
+    Write-Host ""
+    Write-Host "Adult content?" -ForegroundColor Cyan
+    Write-Host "  N = No  (default)  -> D:\03 Media\Movies & TV"
+    Write-Host "  Y = Yes           -> D:\03 Media\Adult"
+    $AdultChoice = Read-Host "Select [Y/N] (default N)"
+    if ($AdultChoice -match '^(?i)y') {
+        $Adult = $true
+        Write-Host "Save root: D:\03 Media\Adult" -ForegroundColor Yellow
+    }
+}
+elseif ($Adult -and $Mode -eq "Movie") {
+    Write-Host "Adult mode: D:\03 Media\Adult" -ForegroundColor Yellow
+}
 
 function Format-Size {
     param([double]$Bytes)
@@ -349,7 +384,8 @@ if ($TryPlaylist -and $null -ne $PlaylistInfo) {
                 -Mode $Mode `
                 -PlaylistIndex $Index `
                 -MaxHeight $MaxHeight `
-                -PreferCodec $PreferCodec
+                -PreferCodec $PreferCodec `
+                -Adult:$Adult
 
             $code = $LASTEXITCODE
             $title = if ($Entry.title) { [string]$Entry.title } else { [string]$Entry.id }
@@ -382,7 +418,7 @@ Write-Host " STEP 1 - QUERY" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-$QueryResult = & $QueryScript -Url $Url -PlaylistTitle $PlaylistTitle -Mode $Mode
+$QueryResult = & $QueryScript -Url $Url -PlaylistTitle $PlaylistTitle -Mode $Mode -Adult:$Adult
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR: query failed." -ForegroundColor Red
     exit 1
@@ -497,17 +533,23 @@ Write-Host "Audio      : $AudioPart"
 Write-Host "Selector   :"
 Write-Host $FormatSelector -ForegroundColor Yellow
 
-# Skip existing
+# Skip existing（mkv / mp4 / webm 都算已完成）
 $ExistingMkv = $null
 if ($PlaylistIndex -gt 0) {
     $prefix = "{0:D3} - " -f $PlaylistIndex
-    $ExistingMkv = Get-ChildItem -LiteralPath $DownloadDir -Filter "*.mkv" -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name.StartsWith($prefix) } |
-        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    $ExistingMkv = Get-ChildItem -LiteralPath $DownloadDir -File -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Extension -match '^\.(mkv|mp4|webm)$' -and
+            $_.Name.StartsWith($prefix)
+        } |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
 }
 else {
-    $ExistingMkv = Get-ChildItem -LiteralPath $DownloadDir -Filter "*.mkv" -File -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    $ExistingMkv = Get-ChildItem -LiteralPath $DownloadDir -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Extension -match '^\.(mkv|mp4|webm)$' } |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
 }
 if ($null -ne $ExistingMkv) {
     Write-Host ""
@@ -541,15 +583,17 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-# STEP 4 FIND MKV
-$Mkv = Get-ChildItem -LiteralPath $DownloadDir -Filter "*.mkv" -File -ErrorAction SilentlyContinue |
-    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+# STEP 4 FIND VIDEO（优先较新的；扩展名 mkv/mp4/webm）
+$Mkv = Get-ChildItem -LiteralPath $DownloadDir -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Extension -match '^\.(mkv|mp4|webm)$' } |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
 if ($null -eq $Mkv) {
-    Write-Host "ERROR: MKV not found." -ForegroundColor Red
+    Write-Host "ERROR: Video file (mkv/mp4/webm) not found." -ForegroundColor Red
     exit 1
 }
 $MkvPath = $Mkv.FullName
-Write-Host "MKV: $MkvPath"
+Write-Host "Video: $MkvPath"
 
 Add-EnglishAutoSubtitle -Mkv $MkvPath -Json $RawJson
 

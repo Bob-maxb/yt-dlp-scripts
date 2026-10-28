@@ -114,6 +114,22 @@ $Config      = Join-Path $PSScriptRoot "config_youtube"   # 和 ps1 同目录
 $QueryScript = Join-Path $PSScriptRoot "query-youtube.ps1"
 $Cookies     = Join-Path $Root "cookies.txt"
 
+# Mode：命令行未指定 -Mode 时才询问（默认 Movie）
+if (-not $PSBoundParameters.ContainsKey('Mode')) {
+    Write-Host ""
+    Write-Host "Download mode?" -ForegroundColor Cyan
+    Write-Host "  1 = Movie   (default)  -> D:\03 Media\Movies & TV"
+    Write-Host "  2 = Phonics            -> D:\10 Learning\English\Phonics"
+    $ModeChoice = Read-Host "Select [1-2] (default 1)"
+    if ($ModeChoice -eq "2") {
+        $Mode = "Phonics"
+        Write-Host "Mode: Phonics" -ForegroundColor Yellow
+    }
+    else {
+        $Mode = "Movie"
+        Write-Host "Mode: Movie" -ForegroundColor Yellow
+    }
+}
 
 # $BaseDir = "D:\03 Media\Movies & TV"
 # ========================================

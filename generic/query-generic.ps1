@@ -8,7 +8,9 @@ param(
     [string]$PlaylistTitle = "",
 
     [ValidateSet("Movie", "Phonics")]
-    [string]$Mode = "Movie"
+    [string]$Mode = "Movie",
+
+    [switch]$Adult
 )
 
 $ErrorActionPreference = "Stop"
@@ -18,6 +20,9 @@ $YtDlp = Join-Path $Root "yt-dlp.exe"
 
 if ($Mode -eq "Phonics") {
     $BaseDir = "D:\10 Learning\English\Phonics"
+}
+elseif ($Adult) {
+    $BaseDir = "D:\03 Media\Adult"
 }
 else {
     $BaseDir = "D:\03 Media\Movies & TV"
