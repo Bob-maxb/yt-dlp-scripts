@@ -1,21 +1,25 @@
 # yt-dlp 下载项目完整指南
 
-> 版本：Complete v3  
-> 适用脚本：`download-movie.ps1` / `query-JSON-v4.ps1` / `config_movie`  
+> 版本：Complete v4  
+> 适用脚本：  
+> - **YouTube：** `download-youtube.ps1` / `query-youtube.ps1` / `config_youtube`  
+>   （旧名仍可能使用：`download-movie.ps1` / `query-JSON-v4.ps1` / `config_movie`）  
+> - **其它网站：** `download-generic.ps1` / `query-generic.ps1` / `config_generic`  
 > 更新日期：2026-10
 
 ---
 
 ## 0. 项目概述
 
-自动化下载 YouTube 视频，核心能力：
+自动化下载 **YouTube** 与 **其它 yt-dlp 支持站点** 的视频，核心能力：
 
 - 单视频 / Playlist / 频道 Videos 页（`@Name` / `@Name/videos`）
 - `watch?v=...&list=...` 链接交互选择：只下本集或整表
-- JSON 分析与 Opus 多音轨选择（排除 DUBBED-AUTO）
+- JSON 分析与 Opus 多音轨选择（排除 DUBBED-AUTO；无 Opus 时 AAC / `ba*`）
 - Movie / Phonics 两套格式规则
 - 已完成 MKV 跳过、Playlist 成功/失败统计
 - 字幕嵌入、临时文件清理（兼容标题中的 `[]` 等特殊字符）
+- **Generic 脚本：** 非 YouTube 站点单视频 / 简易 Playlist（逻辑对齐 YouTube 版）
 
 **优选组合：**
 
@@ -36,14 +40,31 @@ D:\yt-dlp
 ├── ffmpeg.exe
 ├── ffprobe.exe
 ├── cookies.txt                 # 勿上传 GitHub
-├── config_movie
-├── yt-dlp-git\                 # 或脚本直接放在本目录
-│   ├── download-movie.ps1
-│   ├── query-JSON-v4.ps1
-│   ├── config_movie
+├── youtube\                    # YouTube 专用脚本
+│   ├── download-youtube.ps1    # 旧名 download-movie.ps1
+│   ├── query-youtube.ps1       # 旧名 query-JSON-v4.ps1
+│   └── config_youtube          # 旧名 config_movie
+├── generic\                    # 其它网站脚本
+│   ├── download-generic.ps1
+│   ├── query-generic.ps1
+│   └── config_generic
+├── yt-dlp-git\                 # Git 同步用（可选）
 │   └── yt-dlp_Guide_Complete.md
 └── ...
 ```
+
+**路径约定（脚本在子目录时）：**
+
+```powershell
+$Root        = "D:\yt-dlp"                              # exe、cookies
+$YtDlp       = Join-Path $Root "yt-dlp.exe"
+$Config      = Join-Path $PSScriptRoot "config_youtube" # 与 ps1 同目录
+$QueryScript = Join-Path $PSScriptRoot "query-youtube.ps1"
+$Cookies     = Join-Path $Root "cookies.txt"
+```
+
+- `$PSScriptRoot`：PowerShell **自动变量**，= 当前脚本所在目录，**无需自己赋值**。
+- 必须用 `.\download-youtube.ps1` 等方式**运行文件**；在控制台粘贴整段代码时 `$PSScriptRoot` 可能为空。
 
 **媒体保存位置：**
 
@@ -64,12 +85,20 @@ D:\yt-dlp
 
 ## 2. 快速开始
 
-在脚本所在目录执行（例如 `D:\yt-dlp\yt-dlp-git`）：
+### 2.0 脚本位置与名称对照
+
+| 用途 | 目录 | 脚本 |
+|------|------|------|
+| YouTube | `D:\yt-dlp\youtube\` | `.\download-youtube.ps1` |
+| 其它站 | `D:\yt-dlp\generic\` | `.\download-generic.ps1` |
+
+旧命令若仍指向根目录的 `download-movie.ps1`，请改为上述路径，或继续把脚本放在根目录并用旧文件名。
 
 ### 2.1 单视频（Movie 默认）
 
 ```powershell
-.\download-movie.ps1 "https://www.youtube.com/watch?v=XXXX"
+cd D:\yt-dlp\youtube
+.\download-youtube.ps1 "https://www.youtube.com/watch?v=XXXX"
 ```
 
 会询问最高分辨率与编码（直接回车 = 1080p + AV1）。
@@ -77,21 +106,21 @@ D:\yt-dlp
 ### 2.2 Phonics
 
 ```powershell
-.\download-movie.ps1 "https://www.youtube.com/watch?v=XXXX" -Mode Phonics
+.\download-youtube.ps1 "https://www.youtube.com/watch?v=XXXX" -Mode Phonics
 ```
 
 ### 2.3 Playlist
 
 ```powershell
-.\download-movie.ps1 "https://www.youtube.com/playlist?list=XXXX"
-.\download-movie.ps1 "https://www.youtube.com/playlist?list=XXXX" -Mode Phonics
+.\download-youtube.ps1 "https://www.youtube.com/playlist?list=XXXX"
+.\download-youtube.ps1 "https://www.youtube.com/playlist?list=XXXX" -Mode Phonics
 ```
 
 ### 2.4 频道 Videos 页
 
 ```powershell
-.\download-movie.ps1 "https://www.youtube.com/@MissWhitmore"
-.\download-movie.ps1 "https://www.youtube.com/@MissWhitmore/videos" -Mode Phonics
+.\download-youtube.ps1 "https://www.youtube.com/@MissWhitmore"
+.\download-youtube.ps1 "https://www.youtube.com/@MissWhitmore/videos" -Mode Phonics
 ```
 
 ### 2.5 带 list 的 watch 链接（交互）
@@ -110,14 +139,14 @@ https://www.youtube.com/watch?v=VIDEO_ID&list=PLAYLIST_ID
 仍可加 `-Mode`、`-MaxHeight` 等：
 
 ```powershell
-.\download-movie.ps1 "https://www.youtube.com/watch?v=xxx&list=PLyyy" -Mode Phonics
-.\download-movie.ps1 "https://www.youtube.com/watch?v=xxx&list=PLyyy" -MaxHeight 1080 -PreferCodec av01
+.\download-youtube.ps1 "https://www.youtube.com/watch?v=xxx&list=PLyyy" -Mode Phonics
+.\download-youtube.ps1 "https://www.youtube.com/watch?v=xxx&list=PLyyy" -MaxHeight 1080 -PreferCodec av01
 ```
 
 ### 2.6 只下载指定序号
 
 ```powershell
-.\download-movie.ps1 "https://www.youtube.com/playlist?list=XXXX" -PlaylistIndexRange "3,5-8,12"
+.\download-youtube.ps1 "https://www.youtube.com/playlist?list=XXXX" -PlaylistIndexRange "3,5-8,12"
 ```
 
 格式：`8-11` / `8,10` / `8-11,15,20-22`
@@ -125,7 +154,7 @@ https://www.youtube.com/watch?v=VIDEO_ID&list=PLAYLIST_ID
 ### 2.7 指定分辨率与编码（Movie，跳过询问）
 
 ```powershell
-.\download-movie.ps1 "URL" -MaxHeight 2160 -PreferCodec av01
+.\download-youtube.ps1 "URL" -MaxHeight 2160 -PreferCodec av01
 ```
 
 | 参数 | 可选值 | 默认 |
@@ -138,16 +167,44 @@ https://www.youtube.com/watch?v=VIDEO_ID&list=PLAYLIST_ID
 ```powershell
 $url = (Get-Clipboard).Trim()
 $url
-.\download-movie.ps1 $url -Mode Phonics
+.\download-youtube.ps1 $url -Mode Phonics
 ```
-两行命令一起运行
-$url = Get-Clipboard; .\download-movie.ps1 $url -Mode Phonics
+
+两行命令一起运行：
+
+```powershell
+$url = Get-Clipboard; .\download-youtube.ps1 $url -Mode Phonics
+```
+
+### 2.9 其它网站（generic）【新增】
+
+```powershell
+cd D:\yt-dlp\generic
+.\download-generic.ps1 "https://www.bilibili.com/video/BVxxxx"
+.\download-generic.ps1 "URL" -Mode Phonics
+.\download-generic.ps1 "URL" -MaxHeight 1080
+```
+
+先确认站点支持：
+
+```powershell
+D:\yt-dlp\yt-dlp.exe -F "视频URL"
+```
+
+说明：
+
+- 无 `upload_date` 时用当天日期，不中断查询
+- 音频：Opus → AAC → 任意纯音轨 → `ba*`
+- 非 YouTube 不加 youtube `extractor-args`
+- Playlist：若 yt-dlp 能返回 `entries` 则循环；否则按单 URL
+- 日常 YouTube 仍建议用 `youtube\` 下脚本
+
 ---
 
 ## 3. 整体工作流程
 
 ```text
-download-movie.ps1
+download-youtube.ps1
     │
     ├─ 若 watch?v= + list= 且非递归子任务
     │     → 询问：单集 / 整表（整表则改写为 playlist URL）
@@ -159,7 +216,7 @@ download-movie.ps1
     │     → 输出成功/失败统计
     │
     └─ 单个视频
-          → STEP 1  query-JSON-v4（查询、目录、音频选择）
+          → STEP 1  query-youtube（查询、目录、音频选择）
           → STEP 2  格式选择器（Movie / Phonics）
           → 已有完整 MKV？→ 跳过 exit 0
           → STEP 3  yt-dlp 下载
@@ -169,6 +226,8 @@ download-movie.ps1
           → CLEANUP 临时文件（LiteralPath，支持 [] 标题）
           → FINAL SUMMARY
 ```
+
+**generic 流程：** 与上类似；Playlist 为可选启发式；格式链含通用 `height` 兜底；ffmpeg 调用已做 stderr 静默（兼容 Windows PowerShell 5.1）。
 
 ---
 
@@ -225,17 +284,30 @@ bv*[vcodec^=av01][height<=720][height>480][fps<=30][dynamic_range!*=HDR]
 bv*[vcodec^=av01][height<=480][height>=360][fps<=30][dynamic_range!*=HDR]
 ```
 
+### 4.3 Generic（其它站）【新增】
+
+在 Movie/Phonics 类似编码偏好之外，增加：
+
+```text
+bv*[height<=MaxHeight] + 音频
+b[height<=MaxHeight] + 音频
+b + 音频
+```
+
+无 AV1/VP9 的站点会落到 height / `b` 兜底。
+
 ---
 
-## 5. 音频选择（query-JSON-v4.ps1）
+## 5. 音频选择（query-youtube.ps1 / query-generic.ps1）
 
 **优先级：**
 
 1. 纯 Opus（`acodec` 以 opus 开头且 `vcodec=none`）
 2. 若无 Opus → 纯 AAC / m4a（`mp4a*` / `aac*` 且 `vcodec=none`）
-3. 仍无独立音轨 → selection 文件写空，主脚本使用 `ba*` 回退
+3. （generic）仍无 → 任意纯音轨（`vcodec=none`）
+4. 仍无独立音轨 → selection 文件写空，主脚本使用 `ba*` 回退
 
-**其它规则（不变）：**
+**其它规则（YouTube）：**
 1. xtags 判断 ORIGINAL / DUBBED / DUBBED-AUTO / UNKNOWN
 2. **排除 DUBBED-AUTO**
 3. 按 Source+Language 分组，优先无 DRC → 高 abr → 高 asr
@@ -256,28 +328,32 @@ bv*[vcodec^=av01][height<=480][height>=360][fps<=30][dynamic_range!*=HDR]
 | 有 Opus（或 AAC）多语言独立轨 | 仍按语言分组多选，配合 `--audio-multistreams` 多轨下载 |
 | 仅 `ba*` 回退 | 通常只有 1 条“最佳音频” |
 
-
 查询参数含：
 
 ```text
 --dump-single-json
 --ignore-no-formats-error    # 避免默认选格式失败导致 query 中断
---extractor-args "youtube:player_client=default,web_embedded;skip=translated_subs"
+--extractor-args "youtube:..."   # 仅 YouTube；generic 非 YT 不加
 ```
 
 ---
 
 ## 6. 字幕与清理
 
-**config_movie：** `--write-subs --sub-langs all --sub-format vtt/best --embed-subs`
+**config_youtube / config_generic：** `--write-subs --sub-langs all --sub-format vtt/best --embed-subs`
 
 | 步骤 | 作用 |
 |------|------|
-| STEP 5 | 嵌入 en-orig（English auto-generated） |
+| STEP 5 | 嵌入 en-orig（English auto-generated）；无则跳过 |
 | STEP 6 | 按 info.json 写字幕轨 title |
 | CLEANUP | 删除同名 .webp/.jpg/.png/.vtt/.srt/.description |
 
 CLEANUP 使用目录枚举 + **LiteralPath**，避免标题中 `[Chinese Dubbed]` 等方括号导致删不掉缩略图。
+
+**ffmpeg 与 PowerShell：【新增】**  
+若 `$ErrorActionPreference = "Stop"`，ffmpeg 打到 **stderr** 的版本信息在 **Windows PowerShell 5.1** 上可能触发 `NativeCommandError`。  
+- 建议下载用 **PowerShell 7（pwsh）**  
+- 或在调用处临时 `Continue` + `-hide_banner -loglevel error` + `2>&1 | Out-Null`（generic 脚本已做）
 
 ---
 
@@ -328,6 +404,8 @@ Succeeded / Failed + DETAILED RESULTS（INDEX / STATUS / ID / TITLE）
 --sleep-interval 5 --max-sleep-interval 10
 ```
 
+**config_generic：** 与上类似，但 **不含** youtube `extractor-args`（避免非 YouTube 站点异常）。
+
 ---
 
 ## 11. VIDEO FORMAT SUMMARY 列
@@ -340,23 +418,27 @@ ID / CODEC / RESOLUTION / FPS / **VBR** / **SIZE** / **HDR** / TYPE
 ## 12. 常用命令
 
 ```powershell
+# 查询在线视频
 # 在线格式
 .\yt-dlp.exe -F --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "URL"
 
-查询在线视频编码及字幕coding
-.\yt-dlp.exe -F --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "https://www.youtube.com/watch?v=SkorusaTwbw"; .\yt-dlp.exe --list-subs --sub-langs "en.*,zh.*" --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "https://www.youtube.com/watch?v=SkorusaTwbw"
+# 查询在线视频编码及字幕
+.\yt-dlp.exe -F --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "URL"; .\yt-dlp.exe --list-subs --sub-langs "en.*,zh.*" --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "URL"
+
+# 仅查询（YouTube）
+.\query-youtube.ps1 "URL" -Mode Phonics
+
+# 仅查询（generic）
+.\query-generic.ps1 "URL" -Mode Movie
 
 # 字幕列表
 .\yt-dlp.exe --list-subs --sub-langs "en.*,zh.*" --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "URL"
-
-# 仅查询
-.\query-JSON-v4.ps1 "URL" -Mode Phonics
 
 # 查看本地流信息
 # 本地字幕轨
 .\ffprobe -v error -select_streams s -show_entries stream_tags=language,title -of csv=p=0 "完整路径\文件.mkv"
 
-# 查询视频格式、分辨率、帧率、码率
+# 视频流（请用 csv；ffprobe 官方无 table 输出格式）
 & "D:\yt-dlp\ffprobe.exe" -v error -select_streams v -show_entries stream=index,codec_name,width,height,r_frame_rate,bit_rate -of table "你的文件名.mkv"
 
 # 查询音频格式、声道、采样率、码率和语言
@@ -368,21 +450,54 @@ ID / CODEC / RESOLUTION / FPS / **VBR** / **SIZE** / **HDR** / TYPE
 # 查看全部流信息
 & "D:\yt-dlp\ffprobe.exe" -v error -show_entries "stream=index,codec_type,codec_name,width,height,r_frame_rate,bit_rate,channels,sample_rate:stream_tags=language,title,handler_name" -of table "你的文件名.mkv"
 
-查询本地目录下所有视频编码及字母信息
+# 查询本地目录下所有视频编码及字母信息
 "════════════════════════════════════════════════════════════════════════════════════════════════";"FILE                          SIZE     CONT   VIDEO RES   FPS  VBR      AUDIO                         SUB";"════════════════════════════════════════════════════════════════════════════════════════════════";Get-ChildItem "D:\03 Media\Movies & TV\Single Files\2022-04-25\*.*" | Where-Object {$_.Extension -in ".mp4",".mkv",".webm"} | Sort Name | ForEach-Object {$v=&"D:\yt-dlp\ffprobe.exe" -v error -select_streams v:0 -show_entries "stream=codec_name,height,r_frame_rate,bit_rate" -of csv=p=0 $_.FullName;$a=&"D:\yt-dlp\ffprobe.exe" -v error -select_streams a -show_entries "stream=codec_name,bit_rate:stream_tags=language" -of csv=p=0 $_.FullName;$s=&"D:\yt-dlp\ffprobe.exe" -v error -select_streams s -show_entries "stream_tags=language" -of csv=p=0 $_.FullName;$v=$v -split ',';$video=$v[0].ToUpper();$res=$v[1]+"p";$fps=if($v[2]-match "/"){[math]::Round(($v[2]-split'/')[0]/($v[2]-split'/')[1])}else{"?"};$vbr=if($v[3]-match '^\d+$'){([math]::Round([int]$v[3]/1000)).ToString()+"k"}else{"N/A"};$aud=if(!$a){"-"}else{($a|ForEach-Object{$x=$_-split ',';$abr=if($x[1]-match '^\d+$'){([math]::Round([int]$x[1]/1000)).ToString()+"k"}else{"N/A"};$lang=if($x.Count -gt 2 -and $x[2]){$x[2]}else{"und"};"$($x[0].ToUpper()) $abr $lang"})-join ";"};$sub=if(!$s){"-"}else{($s -join ",").ToUpper()};$size=[math]::Round($_.Length/1MB,1);"{0,-30}{1,-8}{2,-6}{3,-6}{4,-6}{5,-5}{6,-8}{7,-30}{8}" -f $_.Name,$($size.ToString()+"MB"),$_.Extension.Trim('.').ToUpper(),$video,$res,$fps,$vbr,$aud,$sub};"════════════════════════════════════════════════════════════════════════════════════════════════"
 
+# 表格窗口显示本地文件信息
+$dir="D:\10 Learning\English\Phonics"; Get-ChildItem -LiteralPath $dir -File -Recurse | Where-Object {$_.Extension -in ".mkv",".mp4",".webm"} | Sort-Object FullName | ForEach-Object {$f=$_.FullName; $v=&"D:\yt-dlp\ffprobe.exe" -v error -select_streams v:0 -show_entries "stream=codec_name,height,r_frame_rate,bit_rate" -of csv=p=0 $f 2>$null; $ct=&"D:\yt-dlp\ffprobe.exe" -v error -select_streams v:0 -show_entries stream=color_transfer -of csv=p=0 $f 2>$null; $a=&"D:\yt-dlp\ffprobe.exe" -v error -select_streams a -show_entries "stream=codec_name,bit_rate:stream_tags=language" -of csv=p=0 $f 2>$null; $s=&"D:\yt-dlp\ffprobe.exe" -v error -select_streams s -show_entries stream_tags=language -of csv=p=0 $f 2>$null; $vp=if($v){$v -split ','}else{@("-","-","-","-")}; $video=if($vp[0]){$vp[0].ToUpper()}else{"-"}; $res=if($vp[1] -match '^\d+$'){"$($vp[1])p"}else{"-"}; $fps=if($vp[2] -match "/"){$p=$vp[2] -split "/";[math]::Round([double]$p[0]/[double]$p[1],2)}else{"?"}; $vbr=if($vp[3] -match '^\d+$'){"{0}k" -f [math]::Round([int]$vp[3]/1000)}else{"N/A"}; $hdr=if($ct -match "smpte2084|arib-std-b67|smpte428"){"HDR"}elseif($ct -match "bt709|bt470|smpte170m|iec61966"){"SDR"}elseif([string]::IsNullOrWhiteSpace($ct)){"-"}else{$ct}; $aud=if(-not $a){"-"}else{($a|ForEach-Object{$x=$_-split ",";$abr=if($x[1]-match '^\d+$'){"{0}k" -f [math]::Round([int]$x[1]/1000)}else{"N/A"};$lang=if($x.Count -gt 2 -and $x[2]){$x[2]}else{"und"};"$($x[0].ToUpper()) $abr $lang"})-join "; "}; $sub=if(-not $s){"-"}else{(($s|Where-Object{$_})-join ",").ToUpper()}; $idx=if($_.BaseName -match '^\s*(\d+)'){$Matches[1]}else{"-"}; [PSCustomObject]@{IDX=$idx; FOLDER=$_.Directory.Name; FILE=$_.Name; SIZE=("{0:N1} MB" -f ($_.Length/1MB)); CONT=$_.Extension.Trim(".").ToUpper(); VIDEO=$video; RES=$res; FPS=$fps; VBR=$vbr; HDR=$hdr; AUDIO=$aud; SUB=$sub}} | Out-GridView -Title "Media scan"
 
-# 语法检查
-$tokens=$null; $errors=$null
-[System.Management.Automation.Language.Parser]::ParseFile("D:\yt-dlp\yt-dlp-git\download-movie.ps1",[ref]$tokens,[ref]$errors) | Out-Null
-$errors
+
+# 脚本语法检查
+$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile("D:\yt-dlp\query-JSON-v4.ps1",[ref]$tokens,[ref]$errors) | Out-Null; $errors | ForEach-Object { "Line $($_.Extent.StartLineNumber), Col $($_.Extent.StartColumnNumber): $($_.Message)" }
+没有任何输出：语法检查通过。
 
 # 备份脚本命令
 PS D:\yt-dlp> copy-Item "D:\yt-dlp\query-JSON-v4.ps1" "D:\yt-dlp\query-JSON-v4-20261013-正常版.ps1"
 PS D:\yt-dlp> copy-Item "D:\yt-dlp\download-movie.ps1" "D:\yt-dlp\download-movie-20261009-正常版.ps1"  
+
+
+# 本地视频查询脚本的使用方法：
+PowerShell# 默认目录
+D:\yt-dlp\scan-media.ps1
+
+# 指定目录
+D:\yt-dlp\scan-media.ps1 "D:\03 Media\Movies & TV\Playlist"
+窗口里可拖宽列、点表头排序；CONT、SUB、完整文件名都不会截断。
+
+# 封装字幕
+.\ffmpeg -i "How to describe different sizes in English.mp4" -i "How to describe different sizes in English [QpEGDf3WAn8].es-US.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].en-orig.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].pt-BR.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].ja.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].it.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].id.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].hi.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].de-DE.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].fr-FR.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].en.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].zh-Hans.srt" -map 0 -map 1 -map 2 -map 3 -map 4 -map 5 -map 6 -map 7 -map 8 -map 9 -map 10 -map 11 -c copy -metadata:s:s:0 language=es-US -metadata:s:s:1 language=en-orig -metadata:s:s:2 language=pt-BR -metadata:s:s:3 language=ja -metadata:s:s:4 language=it -metadata:s:s:5 language=id -metadata:s:s:6 language=hi -metadata:s:s:7 language=de-DE -metadata:s:s:8 language=fr-FR -metadata:s:s:9 language=en -metadata:s:s:10 language=zh-Hans "How to describe different sizes in English sub.mp4"
+
+
+# yt-dlp原生命令
+下载普通 YouTube 视频：
+.\yt-dlp.exe --config-location "D:\yt-dlp\config_phonics Minimum AVC1 480P" "https://www.youtube.com/watch?v=XlxEE41JHK4"
+
+.\yt-dlp.exe --config-location "D:\yt-dlp\config_phonics Minimum AVC1 480P" "https://www.youtube.com/watch?v=aftne3KaXEM"
+
+如果是 Playlist：
+.\yt-dlp.exe --config-location "D:\yt-dlp\config_phonics Minimum AVC1 480P" "https://www.youtube.com/playlist?list=XXXXXXXXXXX"
+
+
+如果需要 cookies
+.\yt-dlp.exe --ignore-config --cookies cookies.txt --config-location "D:\yt-dlp\config_phonics AVC1 + Opus" "https://www.youtube.com/watch?v=QpEGDf3WAn8" -o ""
+
+
+
+如果是 Playlist：
+.\yt-dlp.exe --cookies cookies.txt --config-location "D:\yt-dlp\config_phonics" "https://www.youtube.com/playlist?list=PLToJJ2R3kEHqDaSE5GxLX2JgkXo0EzO3E&index=1"
+
+
 ```
-
-
 ---
 
 ## 13. GitHub 同步（简要）
@@ -408,9 +523,48 @@ git push
 | 480p 抢在 720p 前 | 使用 height 分档（>480 / >=360） |
 | Playlist 一集存在就全跳过 | 按 `003 -` 前缀匹配 |
 | 残留 .webp | CLEANUP 用 LiteralPath；标题含 `[]` 时旧逻辑会失败 |
-| 找不到 download-movie.ps1 | 在脚本实际目录执行，或写全路径 |
+| 找不到 download-*.ps1 | 在脚本实际目录执行，或写全路径 |
 | git 不是内部或外部命令 | 安装 Git for Windows 并重开终端 |
 | push 前 Author identity unknown | `git config --global user.name` / `user.email` |
+| Selection file not found（无 Opus 老视频） | 用 `Set-Content -Value $Lines`；可加 AAC 兜底 |
+| 只有 AAC、没有 Opus | 先选 AAC 纯音轨，否则 `ba*` |
+| ffmpeg version … NativeCommandError | PS 5.1 + Stop 把 stderr 当错误；用 pwsh 7 或静默调用 ffmpeg |
+| 脚本 not digitally signed / cannot be loaded | 见 §14.1 |
+
+### 14.1 PowerShell 执行策略【新增】
+
+查看：
+
+```powershell
+Get-ExecutionPolicy -List
+```
+
+常见：`LocalMachine = RemoteSigned`（本机脚本可跑；**从网络保存的文件**需解锁或签名）。
+
+**解除“来自网络”标记（推荐，含子目录）：**
+
+```powershell
+Get-ChildItem "D:\yt-dlp" -Recurse -File | Unblock-File
+```
+
+- `-Recurse`：进入 `youtube`、`generic` 等子文件夹  
+- `-File`：只处理文件  
+
+**仅当前窗口临时允许：**
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+```
+
+关闭窗口后失效。
+
+| 命令 | 含义 |
+|------|------|
+| `LocalMachine RemoteSigned` | 全机：本地可跑，外来需签名/解锁 |
+| `CurrentUser RemoteSigned` | 仅当前用户 |
+| `Process Bypass` | 仅本窗口 |
+
+给脚本末尾加空行**不能**解除策略限制。
 
 ---
 
@@ -421,6 +575,7 @@ git push
 3. Movie：可交互分辨率/编码；Playlist 只问一次  
 4. 选择顺序：独立高 → 独立次 → 合并高 → 合并次 → AVC1 → 兜底  
 5. 已完成可安全重跑；特殊字符文件名可清理  
+6. YouTube / Generic 分目录；exe 与 cookies 固定在 `D:\yt-dlp\`
 
 ---
 
@@ -436,15 +591,16 @@ git push
 
 | 文件 | 职责 |
 |------|------|
-| `download-movie.ps1` | 链接解析、Playlist/频道、格式选择、下载、后处理、跳过、统计 |
-| `query-JSON-v4.ps1` | 查询 JSON、目录、音频选择、格式/字幕摘要 |
-| `config_movie` | yt-dlp 全局下载与封装参数 |
+| `download-youtube.ps1` | 链接解析、Playlist/频道、格式选择、下载、后处理、跳过、统计 |
+| `query-youtube.ps1` | 查询 JSON、目录、音频选择、格式/字幕摘要 |
+| `config_youtube` | yt-dlp 全局参数（含 youtube extractor-args） |
+| `download-generic.ps1` | 其它站点下载（对齐主流程） |
+| `query-generic.ps1` | 其它站点查询（upload_date 可回退） |
+| `config_generic` | 通用配置（无 youtube extractor-args） |
 
 ---
 
-*文档结束。脚本再变更时请同步修订本指南。*
-
-## 16. Appendy
+## 18. Appendy
 AV1优于VP9优于AVC1(H.264)
 OPUS优于AAC
 
@@ -463,46 +619,10 @@ summary sv1+opus+mkv+sub ✔  iPhone 原生无法播放视频部分；sv1+opus+w
 ✔所有优选选择sv1+opus+mkv+sub 组合
 字幕选择VTT最优
 
-封装字幕
-.\ffmpeg -i "How to describe different sizes in English.mp4" -i "How to describe different sizes in English [QpEGDf3WAn8].es-US.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].en-orig.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].pt-BR.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].ja.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].it.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].id.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].hi.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].de-DE.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].fr-FR.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].en.srt" -i "How to describe different sizes in English [QpEGDf3WAn8].zh-Hans.srt" -map 0 -map 1 -map 2 -map 3 -map 4 -map 5 -map 6 -map 7 -map 8 -map 9 -map 10 -map 11 -c copy -metadata:s:s:0 language=es-US -metadata:s:s:1 language=en-orig -metadata:s:s:2 language=pt-BR -metadata:s:s:3 language=ja -metadata:s:s:4 language=it -metadata:s:s:5 language=id -metadata:s:s:6 language=hi -metadata:s:s:7 language=de-DE -metadata:s:s:8 language=fr-FR -metadata:s:s:9 language=en -metadata:s:s:10 language=zh-Hans "How to describe different sizes in English sub.mp4"
-
-
-yt-dlp原生命令
-下载命令
-下载普通 YouTube 视频：
-.\yt-dlp.exe --config-location "D:\yt-dlp\config_phonics Minimum AVC1 480P" "https://www.youtube.com/watch?v=XlxEE41JHK4"
-
-.\yt-dlp.exe --config-location "D:\yt-dlp\config_phonics Minimum AVC1 480P" "https://www.youtube.com/watch?v=aftne3KaXEM"
-
-如果是 Playlist：
-.\yt-dlp.exe --config-location "D:\yt-dlp\config_phonics Minimum AVC1 480P" "https://www.youtube.com/playlist?list=XXXXXXXXXXX"
-
-
-如果需要 cookies
-.\yt-dlp.exe --cookies cookies.txt --config-location "D:\yt-dlp\config_phonics AVC1 + Opus" "https://www.youtube.com/watch?v=QpEGDf3WAn8"
 
 
 
-如果是 Playlist：
-.\yt-dlp.exe --cookies cookies.txt --config-location "D:\yt-dlp\config_phonics" "https://www.youtube.com/playlist?list=PLToJJ2R3kEHqDaSE5GxLX2JgkXo0EzO3E&index=1"
-
-
-
-
-
-查询在线视频编码coding
-.\yt-dlp.exe -F --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "https://www.youtube.com/watch?v=SkorusaTwbw"; .\yt-dlp.exe --list-subs --sub-langs "en.*,zh.*" --cookies cookies.txt --remote-components ejs:github --extractor-args "youtube:player_client=default,web_embedded" "https://www.youtube.com/watch?v=SkorusaTwbw"
-
-查询本地视频编码
-"════════════════════════════════════════════════════════════════════════════════════════════════";"FILE                          SIZE     CONT   VIDEO RES   FPS  VBR      AUDIO                         SUB";"════════════════════════════════════════════════════════════════════════════════════════════════";Get-ChildItem "D:\03 Media\Movies & TV\Single Files\2022-04-25\*.*" | Where-Object {$_.Extension -in ".mp4",".mkv",".webm"} | Sort Name | ForEach-Object {$v=&"D:\yt-dlp\ffprobe.exe" -v error -select_streams v:0 -show_entries "stream=codec_name,height,r_frame_rate,bit_rate" -of csv=p=0 $_.FullName;$a=&"D:\yt-dlp\ffprobe.exe" -v error -select_streams a -show_entries "stream=codec_name,bit_rate:stream_tags=language" -of csv=p=0 $_.FullName;$s=&"D:\yt-dlp\ffprobe.exe" -v error -select_streams s -show_entries "stream_tags=language" -of csv=p=0 $_.FullName;$v=$v -split ',';$video=$v[0].ToUpper();$res=$v[1]+"p";$fps=if($v[2]-match "/"){[math]::Round(($v[2]-split'/')[0]/($v[2]-split'/')[1])}else{"?"};$vbr=if($v[3]-match '^\d+$'){([math]::Round([int]$v[3]/1000)).ToString()+"k"}else{"N/A"};$aud=if(!$a){"-"}else{($a|ForEach-Object{$x=$_-split ',';$abr=if($x[1]-match '^\d+$'){([math]::Round([int]$x[1]/1000)).ToString()+"k"}else{"N/A"};$lang=if($x.Count -gt 2 -and $x[2]){$x[2]}else{"und"};"$($x[0].ToUpper()) $abr $lang"})-join ";"};$sub=if(!$s){"-"}else{($s -join ",").ToUpper()};$size=[math]::Round($_.Length/1MB,1);"{0,-30}{1,-8}{2,-6}{3,-6}{4,-6}{5,-5}{6,-8}{7,-30}{8}" -f $_.Name,$($size.ToString()+"MB"),$_.Extension.Trim('.').ToUpper(),$video,$res,$fps,$vbr,$aud,$sub};"════════════════════════════════════════════════════════════════════════════════════════════════"
-
-
-检查脚本语法的命令
-$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile("D:\yt-dlp\query-JSON-v4.ps1",[ref]$tokens,[ref]$errors) | Out-Null; $errors | ForEach-Object { "Line $($_.Extent.StartLineNumber), Col $($_.Extent.StartColumnNumber): $($_.Message)" }
-没有任何输出：语法检查通过。
-
-
-1. 音频最核心的几个字段
+### 音频 -F 重点字段
 
 在 -F 输出里，你以后重点看这些：
 
@@ -521,7 +641,26 @@ quality	yt-dlp 的质量排序字段	⭐⭐⭐
 lang	yt-dlp 的语言偏好排序字段	⭐⭐⭐⭐
 
 
--F / --list-formats	列出格式	人查看
--f	选择格式下载	下载
--J / --dump-json	输出完整JSON	程序分析
---write-info-json	保存JSON文件	以后离线分析
+| 参数 | 作用 |
+|------|------|
+| -F / --list-formats | 列出格式 | 人查看 | 
+| -f | 选择格式下载 |
+| -J / --dump-json | 完整 JSON | 程序分析 | 
+| --write-info-json | 保存 JSON | 以后离线分析 | 
+
+## 19. 文件重命名备忘【新增】
+
+| 旧名 | 新名 |
+|------|------|
+| download-movie.ps1 | download-youtube.ps1 |
+| query-JSON-v4.ps1 | query-youtube.ps1 |
+| config_movie | config_youtube |
+| download-other.ps1 | download-generic.ps1 |
+| query-other.ps1 | query-generic.ps1 |
+| config_other | config_generic |
+
+download 脚本内 `$Config`、`$QueryScript` 必须与**实际文件名**一致。
+
+---
+
+*文档结束（Complete v4）。脚本再变更时请同步修订本指南。*

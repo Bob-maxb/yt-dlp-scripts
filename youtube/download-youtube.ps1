@@ -99,12 +99,21 @@ else {
 
 }
 
-$YtDlp       = "D:\yt-dlp\yt-dlp.exe"
-$FFmpeg      = "D:\yt-dlp\ffmpeg.exe"
-$FFprobe     = "D:\yt-dlp\ffprobe.exe"
-$Config      = "D:\yt-dlp\config_movie"
-$QueryScript = "D:\yt-dlp\query-JSON-v4.ps1"
-$Cookies     = "D:\yt-dlp\cookies.txt"
+# $YtDlp       = "D:\yt-dlp\yt-dlp.exe"
+# $FFmpeg      = "D:\yt-dlp\ffmpeg.exe"
+# $FFprobe     = "D:\yt-dlp\ffprobe.exe"
+# $Config      = "D:\yt-dlp\config_movie"
+# $QueryScript = "D:\yt-dlp\query-JSON-v4.ps1"
+# $Cookies     = "D:\yt-dlp\cookies.txt"
+
+$Root        = "D:\yt-dlp"
+$YtDlp       = Join-Path $Root "yt-dlp.exe"
+$FFmpeg      = Join-Path $Root "ffmpeg.exe"
+$FFprobe     = Join-Path $Root "ffprobe.exe"
+$Config      = Join-Path $PSScriptRoot "config_youtube"   # 和 ps1 同目录
+$QueryScript = Join-Path $PSScriptRoot "query-youtube.ps1"
+$Cookies     = Join-Path $Root "cookies.txt"
+
 
 # $BaseDir = "D:\03 Media\Movies & TV"
 # ========================================

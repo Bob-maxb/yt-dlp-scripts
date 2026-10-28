@@ -12,7 +12,10 @@ $ErrorActionPreference = "Stop"
 
 
 
-$YtDlp = "D:\yt-dlp\yt-dlp.exe"
+$Root  = "D:\yt-dlp"
+$YtDlp = Join-Path $Root "yt-dlp.exe"
+# cookies:
+
 
 if ($Mode -eq "Phonics") {
     $BaseDir = "D:\10 Learning\English\Phonics"
@@ -52,7 +55,7 @@ $YtArgs = @(
     "--skip-download"
     "--dump-single-json"
     "--ignore-no-formats-error"
-    "--cookies", "D:\yt-dlp\cookies.txt"
+    "--cookies", (Join-Path $Root "cookies.txt")
     "--remote-components", "ejs:github"
     "--extractor-args", "youtube:player_client=default,web_embedded;skip=translated_subs"
     $Url

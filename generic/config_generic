@@ -1,0 +1,22 @@
+# ================================
+# yt-dlp generic (other sites)
+# ================================
+
+--audio-multistreams
+--merge-output-format mkv
+
+--write-subs
+--sub-langs "all"
+--sub-format "vtt/best"
+--embed-subs
+--sleep-subtitles 2
+
+--write-thumbnail
+--embed-thumbnail
+--embed-chapters
+--embed-metadata
+
+--continue
+--ignore-errors
+--sleep-interval 3
+--max-sleep-interval 8

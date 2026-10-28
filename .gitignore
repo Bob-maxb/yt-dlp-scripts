@@ -1,0 +1,9 @@
+cookies.txt
+*.exe
+*.mkv
+*.mp4
+*.webm
+*.vtt
+*.webp
+*.json
+__pycache__/
