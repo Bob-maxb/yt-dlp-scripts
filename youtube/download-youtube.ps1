@@ -18,12 +18,7 @@ param(
     [string]$PreferCodec = ""
 )
 
-
 $ErrorActionPreference = "Stop"
-
-
-
-
 
 # ========================================
 # watch?v= + list= ：询问单集还是整表

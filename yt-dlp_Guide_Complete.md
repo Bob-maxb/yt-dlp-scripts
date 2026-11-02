@@ -201,7 +201,8 @@ cd D:\yt-dlp\generic
 先确认站点支持：
 
 ```powershell
-D:\yt-dlp\yt-dlp.exe -F "视频URL"
+D:\yt-dlp\
+.\yt-dlp.exe -F "视频URL"
 ```
 
 说明：
@@ -526,6 +527,31 @@ D:\yt-dlp\scan-media.ps1 "D:\03 Media\Movies & TV\Playlist"
 
 如果是 Playlist：
 .\yt-dlp.exe --cookies cookies.txt --config-location "D:\yt-dlp\config_phonics" "https://www.youtube.com/playlist?list=PLToJJ2R3kEHqDaSE5GxLX2JgkXo0EzO3E&index=1"
+
+
+## 从视频提取音频（ffmpeg）
+
+可执行文件：`D:\yt-dlp\ffmpeg.exe` / `ffprobe.exe`。
+
+### 只复制音轨（不重新编码，最快）
+
+```powershell
+& "D:\yt-dlp\ffmpeg.exe" -i "视频完整路径.mkv" -vn -acodec copy "输出.m4a"
+-vn：不要视频
+-acodec copy：音轨原样拷出（容器需匹配；Opus 可试 .opus / .webm）
+若 copy 失败，再改用下面的转码方式
+转成 MP3
+& "D:\yt-dlp\ffmpeg.exe" -i "视频.mkv" -vn -acodec libmp3lame -q:a 2 "输出.mp3"
+转成 AAC（.m4a）
+& "D:\yt-dlp\ffmpeg.exe" -i "视频.mkv" -vn -acodec aac -b:a 192k "输出.m4a"
+转成 Opus
+& "D:\yt-dlp\ffmpeg.exe" -i "视频.mkv" -vn -acodec libopus -b:a 128k "输出.opus"
+多音轨时只取某一轨先查看音轨：PowerShell
+& "D:\yt-dlp\ffprobe.exe" -v error -select_streams a -show_entries stream=index,codec_name:stream_tags=language -of csv=p=0 "视频.mkv"
+只取第 2 条音轨（0:a:0 为第一条，0:a:1 为第二条）：
+& "D:\yt-dlp\ffmpeg.exe" -i "视频.mkv" -map 0:a:1 -vn -acodec copy "输出.m4a"
+示例
+& "D:\yt-dlp\ffmpeg.exe" -i "D:\03 Media\Movies & TV\Single Files\某标题\某标题 - 2025-01-01.mkv" -vn -acodec copy "D:\Downloads\audio.m4a"
 
 
 ```
